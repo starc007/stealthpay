@@ -11,6 +11,9 @@ packages/contracts/broadcast/
 # Superpowers
 docs/superpowers/
 
+# Test scripts
+docs/test/
+
 # Env
 .env
 .env.local
