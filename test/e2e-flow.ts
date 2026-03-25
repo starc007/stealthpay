@@ -148,9 +148,7 @@ async function main() {
     console.log(`  Status:  ${registerReceipt.status}`);
     console.log(`  Block:   ${registerReceipt.blockNumber}`);
   } catch (e: any) {
-    console.log(
-      `  Registration may already exist: ${e.message.slice(0, 100)}`,
-    );
+    console.log(`  Registration may already exist: ${e.message.slice(0, 100)}`);
   }
 
   // Verify registration
@@ -160,9 +158,7 @@ async function main() {
     functionName: "stealthMetaAddressOf",
     args: [senderAccount.address, 1n],
   });
-  console.log(
-    `  Stored on-chain:  ${(storedMeta as string).slice(0, 20)}...`,
-  );
+  console.log(`  Stored on-chain:  ${(storedMeta as string).slice(0, 20)}...`);
 
   // ── Step 3: Compute stealth address ────────────
   log("STEP 3", "Sender computing stealth address...");
@@ -231,10 +227,7 @@ async function main() {
   console.log(`  Block:   ${announceReceipt.blockNumber}`);
 
   // ── Step 6: Recipient scans ────────────────────
-  log(
-    "STEP 6",
-    "Recipient scanning for payments (using viewing key only)...",
-  );
+  log("STEP 6", "Recipient scanning for payments (using viewing key only)...");
   const scan = scanStealthAddress(
     ephemeralPubKey,
     recipientKeys.viewingKey,
