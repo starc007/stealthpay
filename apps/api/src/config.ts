@@ -19,7 +19,8 @@ export const config = {
   mpp: {
     secretKey: process.env.MPP_SECRET_KEY || "",
     recipient: (process.env.MPP_RECIPIENT || "0x") as `0x${string}`,
-    pathUsdAddress: "0x20c0000000000000000000000000000000000000" as `0x${string}`,
+    pathUsdAddress:
+      "0x20c0000000000000000000000000000000000000" as `0x${string}`,
     get enabled() {
       return !!this.secretKey && this.recipient !== "0x";
     },
@@ -36,7 +37,7 @@ export const config = {
 export const tempoChain: Chain = {
   id: 42431, // Tempo testnet chain ID
   name: "Tempo Testnet",
-  nativeCurrency: { name: "TEMPO", symbol: "TEMPO", decimals: 18 },
+  nativeCurrency: { name: "USD", symbol: "USD", decimals: 18 },
   rpcUrls: {
     default: { http: [config.rpc.url] },
   },

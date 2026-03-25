@@ -10,7 +10,7 @@ import { scanStealthAddress } from "stealthpay-tempo";
 import { getLastScannedBlock, setLastScannedBlock } from "../db/index";
 
 const ANNOUNCEMENT_EVENT = parseAbiItem(
-  "event Announcement(uint256 indexed schemeId, address indexed stealthAddress, address indexed caller, bytes ephemeralPubKey, bytes metadata)"
+  "event Announcement(uint256 indexed schemeId, address indexed stealthAddress, address indexed caller, bytes ephemeralPubKey, bytes metadata)",
 );
 
 export interface ScannerConfig {
@@ -82,7 +82,10 @@ export async function scanBlocks(config: ScannerConfig): Promise<number> {
     // Decode ephemeral pub key and metadata from log data
     const ephemeralPubKey = decodeEphemeralPubKey(log);
     const metadata = decodeMetadata(log);
-    const viewTag = metadata && metadata.length > 0 ? parseInt(metadata.slice(2, 4), 16) : undefined;
+    const viewTag =
+      metadata && metadata.length > 0
+        ? parseInt(metadata.slice(2, 4), 16)
+        : undefined;
 
     // Store announcement
     await db.execute({
@@ -115,7 +118,7 @@ export async function scanBlocks(config: ScannerConfig): Promise<number> {
         const scan = scanStealthAddress(
           ephemeralPubKey as `0x${string}`,
           user.viewing_key as `0x${string}`,
-          user.spending_pub_key as `0x${string}`
+          user.spending_pub_key as `0x${string}`,
         );
 
         if (scan.viewTag !== viewTag) {
@@ -123,7 +126,9 @@ export async function scanBlocks(config: ScannerConfig): Promise<number> {
         }
 
         // View tag matches — check full address
-        if (scan.expectedAddress.toLowerCase() === stealthAddress.toLowerCase()) {
+        if (
+          scan.expectedAddress.toLowerCase() === stealthAddress.toLowerCase()
+        ) {
           await db.execute({
             sql: `INSERT OR IGNORE INTO matched_payments
                   (registration_id, announcement_id, stealth_address, status)
@@ -137,10 +142,12 @@ export async function scanBlocks(config: ScannerConfig): Promise<number> {
         const scan = scanStealthAddress(
           ephemeralPubKey as `0x${string}`,
           user.viewing_key as `0x${string}`,
-          user.spending_pub_key as `0x${string}`
+          user.spending_pub_key as `0x${string}`,
         );
 
-        if (scan.expectedAddress.toLowerCase() === stealthAddress.toLowerCase()) {
+        if (
+          scan.expectedAddress.toLowerCase() === stealthAddress.toLowerCase()
+        ) {
           await db.execute({
             sql: `INSERT OR IGNORE INTO matched_payments
                   (registration_id, announcement_id, stealth_address, status)
