@@ -8,7 +8,9 @@
     "test": "bun test"
   },
   "dependencies": {
-    "hono": "^4.6.0",
+    "hono": "^4.12.9",
+    "@libsql/client": "^0.17.2",
+    "viem": "^2.47.6",
     "stealthpay-tempo": "workspace:*"
   },
   "devDependencies": {
