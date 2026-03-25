@@ -147,6 +147,15 @@ curl -X POST http://localhost:3000/sweep \
 | `GET /announcements` | Free | — | Public ephemeral key feed |
 | `GET /health` | Free | — | Health check |
 
+## Contract Addresses (Tempo Testnet)
+
+| Contract | Address |
+|---|---|
+| StealthRegistry | `0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4` |
+| StealthAnnouncer | `0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88` |
+
+Chain: Tempo Moderato Testnet (ID: 42431)
+
 ## Environment Variables
 
 Create `.env` in `apps/api/`:
@@ -159,8 +168,9 @@ DATABASE_AUTH_TOKEN=
 # Tempo RPC
 RPC_URL=https://rpc.moderato.tempo.xyz
 
-# Contract addresses (after deployment)
-ANNOUNCER_ADDRESS=0x...
+# Contract addresses (defaults to deployed testnet contracts)
+REGISTRY_ADDRESS=0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4
+ANNOUNCER_ADDRESS=0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88
 
 # MPP payment gating (optional — passthrough if not set)
 MPP_SECRET_KEY=
@@ -173,16 +183,38 @@ SCAN_INTERVAL_MS=10000
 
 ## Deploy Contracts
 
+Requires Tempo's Foundry fork:
+
 ```bash
+# Install Tempo Foundry fork
+foundryup -n tempo
+
 cd packages/contracts
 
-# Set your deployer private key
-export PRIVATE_KEY=0x...
+# Generate a deployer wallet and fund it
+cast wallet new
+cast rpc tempo_fundAddress <YOUR_ADDRESS> --rpc-url https://rpc.moderato.tempo.xyz
 
-# Deploy to Tempo testnet
-forge script script/Deploy.s.sol \
+# Deploy contracts
+forge create src/StealthRegistry.sol:StealthRegistry \
   --rpc-url https://rpc.moderato.tempo.xyz \
+  --private-key <YOUR_PRIVATE_KEY> \
   --broadcast
+
+forge create src/StealthAnnouncer.sol:StealthAnnouncer \
+  --rpc-url https://rpc.moderato.tempo.xyz \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --broadcast
+```
+
+## E2E Test
+
+Run the full stealth payment flow on testnet:
+
+```bash
+# 1. Set your keys in test/e2e-flow.ts
+# 2. Run the test
+bun run test/e2e-flow.ts
 ```
 
 ## How It Works

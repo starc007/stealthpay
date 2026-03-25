@@ -335,10 +335,11 @@ No API keys needed — the agent pays per request via Tempo micropayments.
 
 ## Contract Addresses
 
-| Contract | Testnet | Mainnet |
+| Contract | Testnet (Moderato, chain 42431) | Mainnet |
 |---|---|---|
-| StealthRegistry | TBD | TBD |
-| StealthAnnouncer | TBD | TBD |
+| StealthRegistry | `0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4` | TBD |
+| StealthAnnouncer | `0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88` | TBD |
+| pathUSD | `0x20c0000000000000000000000000000000000000` | — |
 
 ## Scheme IDs
 
@@ -356,6 +357,11 @@ No API keys needed — the agent pays per request via Tempo micropayments.
 **Sweep fails with "Could not derive stealth key":**
 - The spending key doesn't match the registered meta-address
 - The announcement's ephemeral pubkey might be corrupted
+
+**Sweep reverts with insufficient balance:**
+- On Tempo, gas fees are paid in pathUSD (not a separate native token)
+- When sweeping, reserve ~0.01 pathUSD for gas: `sweepAmount = balance - 10000n`
+- A transfer costs ~0.005 pathUSD in gas at current rates
 
 **Zero balance at stealth address:**
 - Tokens were already swept or never arrived

@@ -156,6 +156,18 @@ Stealth addresses use ECDH (Elliptic Curve Diffie-Hellman) to create one-time ad
 
 The sender-recipient link is never visible on-chain.
 
+## Contract Addresses (Tempo Testnet)
+
+| Contract | Address |
+|---|---|
+| StealthRegistry | `0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4` |
+| StealthAnnouncer | `0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88` |
+| pathUSD | `0x20c0000000000000000000000000000000000000` |
+
+Chain: Tempo Moderato Testnet (ID: 42431) | RPC: `https://rpc.moderato.tempo.xyz`
+
+> **Note:** On Tempo, gas fees are paid in pathUSD. When sweeping a stealth address, reserve ~0.01 pathUSD for gas.
+
 ## License
 
 MIT
