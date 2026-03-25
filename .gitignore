@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.turbo/
+*.log
+
+# Foundry
+packages/contracts/out/
+packages/contracts/cache/
+
+# Superpowers
+docs/superpowers/
+
+# Env
+.env
+.env.local
