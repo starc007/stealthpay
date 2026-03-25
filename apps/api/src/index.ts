@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { Mppx, tempo } from "mppx/hono";
+import { config, tempoChain } from "./config";
 import { createDb, initDb } from "./db/index";
 import { scanBlocks } from "./scanner/index";
 import registerRoute from "./routes/register";
@@ -11,40 +12,16 @@ import announcementsRoute from "./routes/announcements";
 import type { Client } from "@libsql/client";
 import type { Chain } from "viem";
 
-// ── Config ───────────────────────────────────────
-
-const DB_URL = process.env.DATABASE_URL || "file:local.db";
-const DB_AUTH_TOKEN = process.env.DATABASE_AUTH_TOKEN;
-const RPC_URL = process.env.RPC_URL || "https://rpc.tempo.xyz/testnet";
-const ANNOUNCER_ADDRESS = process.env.ANNOUNCER_ADDRESS || "0x";
-const MPP_SECRET_KEY = process.env.MPP_SECRET_KEY || "";
-const MPP_RECIPIENT = process.env.MPP_RECIPIENT || "0x";
-const PATHUSD_ADDRESS = "0x20c0000000000000000000000000000000000000";
-const PORT = Number(process.env.PORT || 3000);
-const SCAN_INTERVAL_MS = Number(process.env.SCAN_INTERVAL_MS || 10_000);
-
-// Tempo chain config placeholder — update with actual chain config
-const tempoChain: Chain = {
-  id: 1996, // Tempo testnet chain ID — update as needed
-  name: "Tempo Testnet",
-  nativeCurrency: { name: "TEMPO", symbol: "TEMPO", decimals: 18 },
-  rpcUrls: {
-    default: { http: [RPC_URL] },
-  },
-};
-
 // ── MPP Payment Gating ───────────────────────────
 
-const mppEnabled = !!MPP_SECRET_KEY && MPP_RECIPIENT !== "0x";
-
-const mppx = mppEnabled
+const mppx = config.mpp.enabled
   ? Mppx.create({
-      secretKey: MPP_SECRET_KEY,
+      secretKey: config.mpp.secretKey,
       methods: [
         tempo({
           testnet: true,
-          currency: PATHUSD_ADDRESS as `0x${string}`,
-          recipient: MPP_RECIPIENT as `0x${string}`,
+          currency: config.mpp.pathUsdAddress,
+          recipient: config.mpp.recipient,
         }),
       ],
     })
@@ -63,13 +40,11 @@ const app = new Hono<{
 app.use("*", logger());
 app.use("*", cors());
 
-// Initialize DB
-const db = createDb(DB_URL, DB_AUTH_TOKEN);
+const db = createDb(config.db.url, config.db.authToken);
 
-// Inject DB and config into context
 app.use("*", async (c, next) => {
   c.set("db", db);
-  c.set("rpcUrl", RPC_URL);
+  c.set("rpcUrl", config.rpc.url);
   c.set("chain", tempoChain);
   await next();
 });
@@ -95,8 +70,14 @@ app.route("/announcements", announcementsRoute);
 
 // MPP-gated routes
 if (mppx) {
-  app.use("/scan", mppx.charge({ amount: "0.001", description: "Scan for stealth payments" }));
-  app.use("/sweep", mppx.charge({ amount: "0.01", description: "Sweep stealth payments" }));
+  app.use(
+    "/scan",
+    mppx.charge({ amount: "0.001", description: "Scan for stealth payments" }),
+  );
+  app.use(
+    "/sweep",
+    mppx.charge({ amount: "0.01", description: "Sweep stealth payments" }),
+  );
 }
 
 app.route("/scan", scanRoute);
@@ -108,20 +89,18 @@ app.get("/health", (c) => c.json({ ok: true }));
 // ── Start ────────────────────────────────────────
 
 async function main() {
-  // Init database tables
   await initDb(db);
   console.log("Database initialized");
 
-  // Start background scanner (only if announcer address is configured)
-  if (ANNOUNCER_ADDRESS !== "0x") {
-    console.log(`Starting scanner (interval: ${SCAN_INTERVAL_MS}ms)`);
-    console.log(`Announcer: ${ANNOUNCER_ADDRESS}`);
+  if (config.contracts.announcerAddress !== "0x") {
+    console.log(`Starting scanner (interval: ${config.server.scanIntervalMs}ms)`);
+    console.log(`Announcer: ${config.contracts.announcerAddress}`);
 
     const runScanner = async () => {
       try {
         const matches = await scanBlocks({
-          rpcUrl: RPC_URL,
-          announcerAddress: ANNOUNCER_ADDRESS as `0x${string}`,
+          rpcUrl: config.rpc.url,
+          announcerAddress: config.contracts.announcerAddress,
           db,
         });
         if (matches > 0) {
@@ -132,21 +111,18 @@ async function main() {
       }
     };
 
-    // Initial scan
     await runScanner();
-
-    // Periodic scanning
-    setInterval(runScanner, SCAN_INTERVAL_MS);
+    setInterval(runScanner, config.server.scanIntervalMs);
   } else {
     console.log("Scanner disabled — set ANNOUNCER_ADDRESS to enable");
   }
 
-  console.log(`StealthPay API running on port ${PORT}`);
+  console.log(`StealthPay API running on port ${config.server.port}`);
 }
 
 main().catch(console.error);
 
 export default {
-  port: PORT,
+  port: config.server.port,
   fetch: app.fetch,
 };
