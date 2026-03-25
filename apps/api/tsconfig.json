@@ -2,9 +2,12 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "stealthpay-tempo": ["../../packages/sdk/src/index.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../../packages/sdk/src"]
 }
