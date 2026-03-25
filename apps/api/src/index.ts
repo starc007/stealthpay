@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { Mppx, tempo } from "mppx/hono";
 import { createDb, initDb } from "./db/index";
 import { scanBlocks } from "./scanner/index";
 import registerRoute from "./routes/register";
@@ -16,6 +17,9 @@ const DB_URL = process.env.DATABASE_URL || "file:local.db";
 const DB_AUTH_TOKEN = process.env.DATABASE_AUTH_TOKEN;
 const RPC_URL = process.env.RPC_URL || "https://rpc.tempo.xyz/testnet";
 const ANNOUNCER_ADDRESS = process.env.ANNOUNCER_ADDRESS || "0x";
+const MPP_SECRET_KEY = process.env.MPP_SECRET_KEY || "";
+const MPP_RECIPIENT = process.env.MPP_RECIPIENT || "0x";
+const PATHUSD_ADDRESS = "0x20c0000000000000000000000000000000000000";
 const PORT = Number(process.env.PORT || 3000);
 const SCAN_INTERVAL_MS = Number(process.env.SCAN_INTERVAL_MS || 10_000);
 
@@ -28,6 +32,23 @@ const tempoChain: Chain = {
     default: { http: [RPC_URL] },
   },
 };
+
+// ── MPP Payment Gating ───────────────────────────
+
+const mppEnabled = !!MPP_SECRET_KEY && MPP_RECIPIENT !== "0x";
+
+const mppx = mppEnabled
+  ? Mppx.create({
+      secretKey: MPP_SECRET_KEY,
+      methods: [
+        tempo({
+          testnet: true,
+          currency: PATHUSD_ADDRESS as `0x${string}`,
+          recipient: MPP_RECIPIENT as `0x${string}`,
+        }),
+      ],
+    })
+  : null;
 
 // ── App ──────────────────────────────────────────
 
@@ -60,18 +81,26 @@ app.get("/", (c) => {
     name: "StealthPay API",
     version: "0.1.0",
     routes: [
-      "POST /register",
-      "POST /scan",
-      "POST /sweep",
-      "GET /announcements",
+      "POST /register — free",
+      "POST /scan — $0.001 (MPP-gated)",
+      "POST /sweep — $0.01 (MPP-gated)",
+      "GET /announcements — free",
     ],
   });
 });
 
+// Free routes
 app.route("/register", registerRoute);
+app.route("/announcements", announcementsRoute);
+
+// MPP-gated routes
+if (mppx) {
+  app.use("/scan", mppx.charge({ amount: "0.001", description: "Scan for stealth payments" }));
+  app.use("/sweep", mppx.charge({ amount: "0.01", description: "Sweep stealth payments" }));
+}
+
 app.route("/scan", scanRoute);
 app.route("/sweep", sweepRoute);
-app.route("/announcements", announcementsRoute);
 
 // Health check
 app.get("/health", (c) => c.json({ ok: true }));
