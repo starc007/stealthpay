@@ -41,8 +41,11 @@ const erc20TransferAbi = parseAbi([
  * Creates a transaction signed by the stealth address's private key
  * to transfer tokens to the destination.
  */
-export async function sweepStealthAddress(params: SweepParams): Promise<SweepResult> {
-  const { stealthPrivKey, tokenAddress, amount, destination, rpcUrl, chain } = params;
+export async function sweepStealthAddress(
+  params: SweepParams,
+): Promise<SweepResult> {
+  const { stealthPrivKey, tokenAddress, amount, destination, rpcUrl, chain } =
+    params;
 
   const account = privateKeyToAccount(stealthPrivKey);
 
@@ -71,9 +74,16 @@ export async function sweepStealthAddress(params: SweepParams): Promise<SweepRes
  * Sweep all tokens from a stealth address (queries balance first).
  */
 export async function sweepAllFromStealthAddress(
-  params: Omit<SweepParams, "amount"> & { publicClient: any }
+  params: Omit<SweepParams, "amount"> & { publicClient: any },
 ): Promise<SweepResult> {
-  const { stealthPrivKey, tokenAddress, destination, rpcUrl, chain, publicClient } = params;
+  const {
+    stealthPrivKey,
+    tokenAddress,
+    destination,
+    rpcUrl,
+    chain,
+    publicClient,
+  } = params;
 
   const account = privateKeyToAccount(stealthPrivKey);
 
