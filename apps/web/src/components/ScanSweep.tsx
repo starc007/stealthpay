@@ -198,10 +198,21 @@ export function ScanSweep() {
       args: [PATHUSD as `0x${string}`, depositAmount, secrets.noteCommitment],
     });
 
-    // Save secrets for later withdrawal
-    // noteIndex is approximate — will be refined from events
-    const noteCount = payments.indexOf(payment);
-    saveNoteToStorage(secrets, noteCount);
+    // Wait for tx and get the actual note index from the Deposited event
+    if (publicClient) {
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: depositTx });
+      const logs = await publicClient.getLogs({
+        address: POOL_ADDRESS as `0x${string}`,
+        event: parseAbiItem(
+          "event Deposited(uint256 indexed noteIndex, uint256 indexed noteCommitment, address indexed token, address depositor, uint256 amount)"
+        ),
+        fromBlock: receipt.blockNumber,
+        toBlock: receipt.blockNumber,
+      });
+      const depositLog = logs.find((l) => l.transactionHash === depositTx);
+      const onChainNoteIndex = Number(depositLog?.args?.noteIndex ?? 0);
+      saveNoteToStorage(secrets, onChainNoteIndex);
+    }
 
     return depositTx;
   };

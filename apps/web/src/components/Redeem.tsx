@@ -1,14 +1,10 @@
 import { useState } from "react";
-import { usePublicClient } from "wagmi";
+import { usePublicClient, useWriteContract } from "wagmi";
 import {
-  createWalletClient,
-  http,
   parseAbi,
   parseAbiItem,
   formatUnits,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { tempoModerato } from "viem/chains";
 import {
   loadNotesFromStorage,
   removeNoteFromStorage,
@@ -35,6 +31,7 @@ interface StoredNote {
 
 export function Redeem() {
   const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
   const [notes, setNotes] = useState<StoredNote[]>(() =>
     loadNotesFromStorage().map((n) => ({ ...n }))
   );
@@ -62,10 +59,12 @@ export function Redeem() {
 
     try {
       // 1. Fetch all deposits to build Merkle tree
+      const currentBlock = await publicClient.getBlockNumber();
       const logs = await publicClient.getLogs({
         address: POOL_ADDRESS as `0x${string}`,
         event: depositedEvent,
-        fromBlock: 0n,
+        fromBlock: currentBlock - 50000n,
+        toBlock: currentBlock,
       });
 
       const noteCommitments = logs.map((l) => l.args.noteCommitment!);
@@ -78,20 +77,8 @@ export function Redeem() {
         recipient
       );
 
-      // 3. Submit withdrawal tx (anyone can submit — use a temp account)
-      // Generate a random signer for the tx
-      const tempPrivKey = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("")}` as `0x${string}`;
-      const tempAccount = privateKeyToAccount(tempPrivKey);
-
-      const walletClient = createWalletClient({
-        account: tempAccount,
-        chain: tempoModerato,
-        transport: http(),
-      });
-
-      const txHash = await walletClient.writeContract({
+      // 3. Submit withdrawal tx using connected wallet (pays gas)
+      const txHash = await writeContractAsync({
         address: POOL_ADDRESS as `0x${string}`,
         abi: poolAbi,
         functionName: "withdraw",
@@ -105,7 +92,7 @@ export function Redeem() {
         ],
       });
 
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      await publicClient!.waitForTransactionReceipt({ hash: txHash });
 
       setNotes((prev) =>
         prev.map((n) =>

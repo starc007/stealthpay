@@ -1,9 +1,13 @@
-import { buildPoseidon } from "circomlibjs";
-
 let poseidonInstance: any = null;
 
 async function getPoseidon() {
   if (!poseidonInstance) {
+    // Ensure Buffer polyfill is available before loading circomlibjs
+    if (typeof globalThis.Buffer === "undefined") {
+      const { Buffer } = await import("buffer");
+      globalThis.Buffer = Buffer;
+    }
+    const { buildPoseidon } = await import("circomlibjs");
     poseidonInstance = await buildPoseidon();
   }
   return poseidonInstance;
@@ -37,7 +41,6 @@ export function randomFieldElement(): bigint {
   for (const b of bytes) {
     n = (n << 8n) | BigInt(b);
   }
-  // BN254 scalar field order
   const FIELD_ORDER =
     21888242871839275222246405745257275088548364400416034343698204186575808495617n;
   return n % FIELD_ORDER;
