@@ -5,6 +5,7 @@ import { Footer } from "./components/Footer";
 import { ConnectWallet } from "./components/ConnectWallet";
 import { GenerateKeys } from "./components/GenerateKeys";
 import { SendPayment } from "./components/SendPayment";
+import { WalletHeader } from "./components/WalletHeader";
 
 type Tab = "receive" | "send";
 
@@ -13,6 +14,8 @@ function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <WalletHeader />
+
       {/* Tabs */}
       <div className="flex gap-1 bg-card border border-border rounded-lg p-1">
         <button

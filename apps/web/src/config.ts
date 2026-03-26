@@ -13,7 +13,7 @@ export const wagmiConfig = createConfig({
       keyManager: KeyManager.localStorage(),
     }),
   ],
-  chains: [tempoModerato],
+  chains: [tempoModerato.extend({ feeToken: PATHUSD })],
   multiInjectedProviderDiscovery: true,
   transports: {
     [tempoModerato.id]: http(),

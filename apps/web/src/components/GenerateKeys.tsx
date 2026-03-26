@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAccount, useChains, useDisconnect, useSignMessage, useSwitchChain } from "wagmi";
+import { useAccount, useChains, useSignMessage, useSwitchChain } from "wagmi";
 import {
   generateStealthKeysFromSignature,
   STEALTH_KEY_MESSAGE,
@@ -15,7 +15,6 @@ function truncate(hex: string, n = 8): string {
 export function GenerateKeys() {
   const { address, chainId } = useAccount();
   const chains = useChains();
-  const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
 
@@ -69,20 +68,6 @@ export function GenerateKeys() {
 
   return (
     <div className="space-y-6">
-      {/* Connected header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent)]" />
-          <span className="font-mono text-sm text-dim">{truncate(address || "", 6)}</span>
-        </div>
-        <button
-          onClick={() => disconnect()}
-          className="text-xs text-muted hover:text-danger font-mono transition-colors cursor-pointer"
-        >
-          disconnect
-        </button>
-      </div>
-
       {!isSupportedChain ? (
         <div className="bg-card border border-warning/20 rounded-xl p-6 text-center">
           <h3 className="text-lg font-medium text-[#e8e8ed] mb-2">Wrong Network</h3>
