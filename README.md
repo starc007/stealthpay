@@ -16,16 +16,17 @@ Built on [Tempo](https://tempo.xyz) with:
 
 ```
 stealthpay/
+├── apps/
+│   ├── web/              # Web app — connect wallet, send, receive, scan & sweep
+│   └── api/              # Hono scanner + sweep API (MPP-gated)
 ├── packages/
 │   ├── sdk/              # stealthpay-tempo — npm package
 │   └── contracts/        # StealthRegistry + StealthAnnouncer (Foundry)
-├── apps/
-│   ├── api/              # Hono scanner + sweep API
-│   └── web/              # Landing page (coming soon)
 ```
 
 | Component | Description |
 |---|---|
+| **Web App** | Connect wallet, generate meta-address, send/receive/sweep stealth payments |
 | **StealthRegistry.sol** | EIP-6538 — on-chain stealth meta-address registry |
 | **StealthAnnouncer.sol** | EIP-5564 — on-chain ephemeral key announcements |
 | **stealthpay-tempo** | TypeScript SDK — keygen, send, receive, sweep |
@@ -41,49 +42,78 @@ cd stealthpay
 bun install
 ```
 
-### Run the API locally
+### Run the web app
 
 ```bash
-bun dev --filter=stealthpay-api
+cd apps/web && npx vite
 ```
 
-### Run SDK tests
+Open http://localhost:5173 — connect your Tempo passkey or MetaMask wallet.
+
+### Run the API
 
 ```bash
-bun test --filter=stealthpay-tempo
+cd apps/api && bun run src/index.ts
 ```
 
-### Run contract tests
+### Run tests
 
 ```bash
-cd packages/contracts
-forge test
+# SDK tests
+cd packages/sdk && bun test
+
+# Contract tests (requires Tempo Foundry fork: foundryup -n tempo)
+cd packages/contracts && forge test
+
+# E2E flow on testnet
+bun run test/e2e-flow.ts
 ```
 
-## Usage
+## Web App
+
+The web app has three tabs:
+
+| Tab | What it does |
+|---|---|
+| **Receive** | Connect wallet → sign message → generate stealth meta-address → share it |
+| **Send** | Paste a meta-address → enter amount → sends pathUSD to a stealth address + announces |
+| **Scan** | Sign to unlock keys → scan chain for payments → one-click sweep to any address |
+
+- Works with Tempo passkey wallets (WebAuthn) and MetaMask
+- Uses the `stealthpay-tempo` SDK directly — no custom crypto code
+- Optional destination address for sweep (for better privacy, sweep to a fresh wallet)
+
+## SDK Usage
+
+### Generate stealth keys (from wallet signature)
+
+```typescript
+import {
+  generateStealthKeysFromSignature,
+  STEALTH_KEY_MESSAGE,
+} from "stealthpay-tempo";
+
+// User signs a deterministic message — same wallet always produces same keys
+const signature = await walletClient.signMessage({ message: STEALTH_KEY_MESSAGE });
+const keys = generateStealthKeysFromSignature(signature);
+
+// Share keys.metaAddress.encoded publicly
+```
 
 ### Send a private payment
 
 ```typescript
-import {
-  generateStealthKeys,
-  computeStealthAddress,
-} from "stealthpay-tempo";
+import { computeStealthAddress, parseMetaAddress } from "stealthpay-tempo";
 
-// Recipient generates keys (once)
-const recipientKeys = generateStealthKeys("0xRECIPIENT_PRIVATE_KEY");
-// Share recipientKeys.metaAddress.encoded publicly
-
-// Sender computes stealth address
-const { stealthAddress, ephemeralPubKey, viewTag } = computeStealthAddress(
-  recipientKeys.metaAddress
-);
+// Compute stealth address from recipient's meta-address
+const meta = parseMetaAddress(recipientMetaAddress);
+const { stealthAddress, ephemeralPubKey, viewTag } = computeStealthAddress(meta);
 
 // 1. Transfer tokens to stealthAddress
 // 2. Call StealthAnnouncer.announce(1, stealthAddress, ephemeralPubKey, metadata)
 ```
 
-### Receive and sweep
+### Detect and sweep payments
 
 ```typescript
 import { checkStealthAddress, sweepStealthAddress } from "stealthpay-tempo";
@@ -97,44 +127,15 @@ const stealthPrivKey = checkStealthAddress(
 );
 
 if (stealthPrivKey) {
-  // Sweep to your wallet
   await sweepStealthAddress({
     stealthPrivKey,
-    tokenAddress: "0xUSDC",
+    tokenAddress: PATHUSD_ADDRESS,
     amount: balance,
-    destination: "0xMY_WALLET",
+    destination: "0xFRESH_WALLET", // use a fresh address for privacy
     rpcUrl: "https://rpc.moderato.tempo.xyz",
-    chain: tempoChain,
+    chain: tempoTestnet,
   });
 }
-```
-
-### Use the hosted API
-
-```bash
-# Register for scanning (free)
-curl -X POST http://localhost:3000/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "address": "0xYOUR_ADDRESS",
-    "stealthMetaAddress": "0x...",
-    "viewingKey": "0x..."
-  }'
-
-# Check for pending payments (MPP-gated: $0.001)
-curl -X POST http://localhost:3000/scan \
-  -H "Content-Type: application/json" \
-  -d '{ "address": "0xYOUR_ADDRESS" }'
-
-# Sweep all pending payments (MPP-gated: $0.01)
-curl -X POST http://localhost:3000/sweep \
-  -H "Content-Type: application/json" \
-  -d '{
-    "address": "0xYOUR_ADDRESS",
-    "spendingKey": "0x...",
-    "destination": "0xDESTINATION",
-    "tokenAddress": "0xUSDC_ADDRESS"
-  }'
 ```
 
 ## API Routes
@@ -153,37 +154,27 @@ curl -X POST http://localhost:3000/sweep \
 |---|---|
 | StealthRegistry | `0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4` |
 | StealthAnnouncer | `0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88` |
+| pathUSD | `0x20c0000000000000000000000000000000000000` |
 
-Chain: Tempo Moderato Testnet (ID: 42431)
+Chain: Tempo Moderato Testnet (ID: 42431) | RPC: `https://rpc.moderato.tempo.xyz`
 
 ## Environment Variables
 
 Create `.env` in `apps/api/`:
 
 ```env
-# Database (Turso or local SQLite)
 DATABASE_URL=file:local.db
 DATABASE_AUTH_TOKEN=
-
-# Tempo RPC
 RPC_URL=https://rpc.moderato.tempo.xyz
-
-# Contract addresses (defaults to deployed testnet contracts)
 REGISTRY_ADDRESS=0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4
 ANNOUNCER_ADDRESS=0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88
-
-# MPP payment gating (optional — passthrough if not set)
 MPP_SECRET_KEY=
 MPP_RECIPIENT=0x...
-
-# Server
 PORT=3000
 SCAN_INTERVAL_MS=10000
 ```
 
 ## Deploy Contracts
-
-Requires Tempo's Foundry fork:
 
 ```bash
 # Install Tempo Foundry fork
@@ -191,11 +182,11 @@ foundryup -n tempo
 
 cd packages/contracts
 
-# Generate a deployer wallet and fund it
+# Generate and fund a deployer wallet
 cast wallet new
 cast rpc tempo_fundAddress <YOUR_ADDRESS> --rpc-url https://rpc.moderato.tempo.xyz
 
-# Deploy contracts
+# Deploy
 forge create src/StealthRegistry.sol:StealthRegistry \
   --rpc-url https://rpc.moderato.tempo.xyz \
   --private-key <YOUR_PRIVATE_KEY> \
@@ -207,22 +198,12 @@ forge create src/StealthAnnouncer.sol:StealthAnnouncer \
   --broadcast
 ```
 
-## E2E Test
-
-Run the full stealth payment flow on testnet:
-
-```bash
-# 1. Set your keys in test/e2e-flow.ts
-# 2. Run the test
-bun run test/e2e-flow.ts
-```
-
 ## How It Works
 
-1. **Recipient** registers a stealth meta-address (two public keys: spending + viewing)
-2. **Sender** computes a one-time stealth address using ECDH, sends tokens, announces ephemeral key
-3. **Scanner** polls blocks, checks announcements against registered viewing keys
-4. **Recipient** calls sweep — derives stealth private key, transfers tokens to real wallet
+1. **Recipient** connects wallet, signs a message to derive stealth keys, shares meta-address
+2. **Sender** pastes meta-address, computes a one-time stealth address via ECDH, sends tokens + announces
+3. **Recipient** scans chain for announcements matching their viewing key
+4. **Recipient** sweeps funds from stealth addresses to their wallet (or a fresh address for privacy)
 
 The on-chain observer sees transfers to random addresses but cannot link sender to recipient.
 
@@ -235,10 +216,13 @@ The on-chain observer sees transfers to random addresses but cannot link sender 
 | Recipient | Spending + viewing keys | Detect and spend | — |
 | Observer | Stealth addresses | See transfers happened | Link sender to recipient |
 
+> **Privacy note:** When sweeping, the tx links the stealth address to the destination. For maximum privacy, sweep to a fresh wallet — not your main address.
+
 ## Tech Stack
 
 - **Contracts**: Solidity + Foundry (EIP-5564, EIP-6538)
 - **SDK**: TypeScript, viem, @noble/secp256k1
+- **Web**: React + Vite + Tailwind + wagmi
 - **API**: Hono + Bun
 - **DB**: Turso (libSQL)
 - **Payments**: MPP (mppx)
