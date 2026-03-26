@@ -15,10 +15,8 @@ import {
   type NoteSecrets,
 } from "../lib/pool";
 import { generateWithdrawProof } from "../lib/prover";
-import { PATHUSD } from "../config";
+import { PATHUSD, POOL_ADDRESS } from "../config";
 import { TxLink } from "./TxLink";
-
-const POOL_ADDRESS = "0xF09BaF55940346C84E439F836Dd686A3102D1cF3";
 
 const poolAbi = parseAbi([
   "function withdraw(uint256[8] calldata proof, uint256 nullifier, uint256 merkleRoot, uint256 amount, address token, address recipient) external",

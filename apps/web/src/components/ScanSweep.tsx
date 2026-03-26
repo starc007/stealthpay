@@ -16,11 +16,9 @@ import {
   STEALTH_KEY_MESSAGE,
   type StealthKeys,
 } from "stealthpay-tempo";
-import { ANNOUNCER_ADDRESS, PATHUSD } from "../config";
+import { ANNOUNCER_ADDRESS, PATHUSD, POOL_ADDRESS } from "../config";
 import { TxLink } from "./TxLink";
 import { createNoteSecrets, saveNoteToStorage } from "../lib/pool";
-
-const POOL_ADDRESS = "0xF09BaF55940346C84E439F836Dd686A3102D1cF3";
 
 const erc20Abi = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
