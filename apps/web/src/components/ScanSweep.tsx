@@ -6,6 +6,7 @@ import {
   parseAbi,
   formatUnits,
   parseAbiItem,
+  type Address,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { tempoModerato } from "viem/chains";
@@ -48,6 +49,12 @@ export function ScanSweep() {
   const [sweepingAll, setSweepingAll] = useState(false);
   const [error, setError] = useState("");
   const [scanComplete, setScanComplete] = useState(false);
+  const [destination, setDestination] = useState("");
+
+  const sweepTo: Address | undefined =
+    destination.match(/^0x[a-fA-F0-9]{40}$/)
+      ? (destination as Address)
+      : address;
 
   const handleUnlockAndScan = async () => {
     setError("");
@@ -55,7 +62,6 @@ export function ScanSweep() {
       const signature = await signMessageAsync({ message: STEALTH_KEY_MESSAGE });
       const result = generateStealthKeysFromSignature(signature as `0x${string}`);
       setKeys(result);
-      // Auto-scan after unlocking
       await scanChain(result);
     } catch (e: any) {
       setError(e.message?.includes("rejected") ? "Signature rejected" : (e.message || "Failed"));
@@ -125,14 +131,11 @@ export function ScanSweep() {
     }
   };
 
-  const sweepOne = async (payment: DetectedPayment): Promise<string | null> => {
-    if (!address) return null;
-
+  const sweepOne = async (payment: DetectedPayment, to: Address): Promise<string | null> => {
     const gasReserve = 10000n; // 0.01 pathUSD
     const sweepAmount = payment.balance > gasReserve ? payment.balance - gasReserve : 0n;
     if (sweepAmount === 0n) return null;
 
-    // Create a wallet client with the stealth private key
     const stealthAccount = privateKeyToAccount(payment.stealthPrivKey as `0x${string}`);
     const stealthClient = createWalletClient({
       account: stealthAccount,
@@ -140,24 +143,22 @@ export function ScanSweep() {
       transport: http(),
     });
 
-    const txHash = await stealthClient.writeContract({
+    return stealthClient.writeContract({
       address: PATHUSD as `0x${string}`,
       abi: erc20Abi,
       functionName: "transfer",
-      args: [address, sweepAmount],
+      args: [to, sweepAmount],
     });
-
-    return txHash;
   };
 
   const handleSweepAll = async () => {
+    if (!sweepTo) return;
     setSweepingAll(true);
     setError("");
 
     const sweepable = payments.filter((p) => p.balance > 10000n && !p.sweepTxHash);
 
     for (const payment of sweepable) {
-      // Mark as sweeping
       setPayments((prev) =>
         prev.map((p) =>
           p.stealthAddress === payment.stealthAddress ? { ...p, sweeping: true } : p
@@ -165,7 +166,7 @@ export function ScanSweep() {
       );
 
       try {
-        const txHash = await sweepOne(payment);
+        const txHash = await sweepOne(payment, sweepTo);
         setPayments((prev) =>
           prev.map((p) =>
             p.stealthAddress === payment.stealthAddress
@@ -221,12 +222,8 @@ export function ScanSweep() {
     <div className="space-y-4">
       {scanning && (
         <div className="bg-card border border-border rounded-xl p-6 text-center">
-          <div className="animate-pulse text-dim font-mono text-sm">
-            Scanning the chain...
-          </div>
-          <p className="text-[11px] text-muted mt-2">
-            Checking announcements against your viewing key
-          </p>
+          <div className="animate-pulse text-dim font-mono text-sm">Scanning the chain...</div>
+          <p className="text-[11px] text-muted mt-2">Checking announcements against your viewing key</p>
         </div>
       )}
 
@@ -239,9 +236,9 @@ export function ScanSweep() {
         </div>
       )}
 
-      {/* Summary + sweep all */}
+      {/* Summary + destination + sweep */}
       {scanComplete && payments.length > 0 && (
-        <div className="bg-card border border-accent/20 rounded-xl p-5">
+        <div className="bg-card border border-accent/20 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="font-mono text-lg text-accent font-medium">
@@ -251,17 +248,44 @@ export function ScanSweep() {
                 {payments.length} payment{payments.length !== 1 ? "s" : ""} detected
               </p>
             </div>
-            {sweepableCount > 0 && (
-              <button
-                onClick={handleSweepAll}
-                disabled={sweepingAll}
-                type="button"
-                className="border border-accent text-accent font-mono text-sm px-5 py-2.5 rounded-lg hover:bg-accent hover:text-[#0a0a0c] hover:shadow-[0_0_20px_var(--color-accent-glow)] transition-all disabled:opacity-40 cursor-pointer"
-              >
-                {sweepingAll ? "Sweeping..." : `Sweep All to Wallet`}
-              </button>
-            )}
           </div>
+
+          {/* Destination input */}
+          {sweepableCount > 0 && (
+            <div>
+              <label className="block font-mono text-[10px] text-muted uppercase tracking-wider mb-1.5">
+                Sweep to (optional — defaults to connected wallet)
+              </label>
+              <input
+                type="text"
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+                placeholder={address || "0x..."}
+                className="w-full bg-input border border-border rounded-md px-3 py-2 text-[#e8e8ed] font-mono text-xs outline-none focus:border-accent transition-colors placeholder:text-muted"
+              />
+              {destination && !destination.match(/^0x[a-fA-F0-9]{40}$/) && (
+                <p className="text-[10px] text-danger mt-1 font-mono">Invalid address</p>
+              )}
+            </div>
+          )}
+
+          {/* Sweep button */}
+          {sweepableCount > 0 && (
+            <button
+              onClick={handleSweepAll}
+              disabled={sweepingAll || (!!destination && !destination.match(/^0x[a-fA-F0-9]{40}$/))}
+              type="button"
+              className="w-full border border-accent text-accent font-mono text-sm px-5 py-3 rounded-lg hover:bg-accent hover:text-[#0a0a0c] hover:shadow-[0_0_20px_var(--color-accent-glow)] transition-all disabled:opacity-40 cursor-pointer"
+            >
+              {sweepingAll
+                ? "Sweeping..."
+                : `Sweep ${sweepableCount} payment${sweepableCount !== 1 ? "s" : ""} to ${
+                    destination
+                      ? destination.slice(0, 8) + "..." + destination.slice(-4)
+                      : "connected wallet"
+                  }`}
+            </button>
+          )}
         </div>
       )}
 
@@ -302,7 +326,7 @@ export function ScanSweep() {
           </div>
 
           {payment.sweepTxHash && (
-            <p className="font-mono text-[10px] text-dim mt-2 break-all pl-5.5">
+            <p className="font-mono text-[10px] text-dim mt-2 break-all pl-6">
               tx: {payment.sweepTxHash}
             </p>
           )}
@@ -322,7 +346,7 @@ export function ScanSweep() {
           {scanning ? "Scanning..." : "Rescan"}
         </button>
         <button
-          onClick={() => { setKeys(null); setPayments([]); setScanComplete(false); setError(""); }}
+          onClick={() => { setKeys(null); setPayments([]); setScanComplete(false); setError(""); setDestination(""); }}
           type="button"
           className="flex-1 text-xs text-muted hover:text-dim font-mono transition-colors cursor-pointer py-2 border border-border rounded-lg hover:border-border-active"
         >
