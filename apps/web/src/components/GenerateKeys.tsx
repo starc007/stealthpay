@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useConnection, useDisconnect, useSignMessage } from "wagmi";
+import { useAccount, useDisconnect, useSignMessage } from "wagmi";
 import {
   generateStealthKeysFromSignature,
   STEALTH_KEY_MESSAGE,
@@ -13,7 +13,7 @@ function truncate(hex: string, n = 8): string {
 }
 
 export function GenerateKeys() {
-  const { address } = useConnection();
+  const { address } = useAccount();
   const { disconnect } = useDisconnect();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
   const [keys, setKeys] = useState<StealthKeys | null>(null);
