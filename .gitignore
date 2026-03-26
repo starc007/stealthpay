@@ -11,6 +11,9 @@ packages/contracts/broadcast/
 # Superpowers
 docs/superpowers/
 
+# Context (for AI sessions, not for git)
+docs/CONTEXT.md
+
 
 # Env
 .env
