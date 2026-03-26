@@ -28,3 +28,16 @@ export {
   type SweepParams,
   type SweepResult,
 } from "./sweep";
+
+// ── Privacy Pool (deposit + ZK withdraw) ─────────
+export {
+  depositToPool,
+  withdrawFromPool,
+  getPoolRoot,
+  getPoolDeposits,
+  type PoolDepositParams,
+  type PoolDepositResult,
+  type PoolWithdrawParams,
+  type PoolWithdrawResult,
+  type NoteInputs,
+} from "./pool";
