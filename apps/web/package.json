@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.95.2",
-    "stealthpay-tempo": "workspace:*",
+    "circomlibjs": "^0.1.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "snarkjs": "^0.7.6",
+    "stealthpay-tempo": "workspace:*",
     "viem": "^2.47.6",
     "wagmi": "^3.6.0"
   },
