@@ -1,16 +1,7 @@
 import { useState } from "react";
-import {
-  useAccount,
-  useChains,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  useSwitchChain,
-} from "wagmi";
+import { useAccount, useChains, useWriteContract, useSwitchChain } from "wagmi";
 import { parseUnits, parseAbi } from "viem";
-import {
-  computeStealthAddress,
-  parseMetaAddress,
-} from "stealthpay-tempo";
+import { computeStealthAddress, parseMetaAddress } from "stealthpay-tempo";
 import { PATHUSD, ANNOUNCER_ADDRESS } from "../config";
 import { TxLink } from "./TxLink";
 
@@ -35,20 +26,10 @@ export function SendPayment() {
   const [step, setStep] = useState<Step>("input");
   const [error, setError] = useState("");
   const [stealthAddr, setStealthAddr] = useState("");
-  const [ephPubKey, setEphPubKey] = useState("");
-  const [viewTag, setViewTag] = useState(0);
   const [transferHash, setTransferHash] = useState("");
   const [announceHash, setAnnounceHash] = useState("");
 
   const { writeContractAsync } = useWriteContract();
-
-  const transferReceipt = useWaitForTransactionReceipt({
-    hash: transferHash as `0x${string}` | undefined,
-  });
-
-  const announceReceipt = useWaitForTransactionReceipt({
-    hash: announceHash as `0x${string}` | undefined,
-  });
 
   const handleSend = async () => {
     setError("");
@@ -68,8 +49,6 @@ export function SendPayment() {
       const meta = parseMetaAddress(metaInput as `0x${string}`);
       const result = computeStealthAddress(meta);
       setStealthAddr(result.stealthAddress);
-      setEphPubKey(result.ephemeralPubKey);
-      setViewTag(result.viewTag);
 
       // 2. Transfer tokens to stealth address
       setStep("sending");
@@ -85,7 +64,8 @@ export function SendPayment() {
 
       // 3. Announce ephemeral key
       setStep("announcing");
-      const metadata = `0x${result.viewTag.toString(16).padStart(2, "0")}${PATHUSD.slice(2)}` as `0x${string}`;
+      const metadata =
+        `0x${result.viewTag.toString(16).padStart(2, "0")}${PATHUSD.slice(2)}` as `0x${string}`;
 
       const announceTxHash = await writeContractAsync({
         address: ANNOUNCER_ADDRESS as `0x${string}`,
@@ -113,7 +93,6 @@ export function SendPayment() {
     setAmount("");
     setError("");
     setStealthAddr("");
-    setEphPubKey("");
     setTransferHash("");
     setAnnounceHash("");
   };
@@ -121,8 +100,12 @@ export function SendPayment() {
   if (!isSupportedChain) {
     return (
       <div className="bg-card border border-warning/20 rounded-xl p-6 text-center">
-        <h3 className="text-lg font-medium text-[#e8e8ed] mb-2">Wrong Network</h3>
-        <p className="text-sm text-dim font-light mb-4">Switch to Tempo Testnet to send payments.</p>
+        <h3 className="text-lg font-medium text-[#e8e8ed] mb-2">
+          Wrong Network
+        </h3>
+        <p className="text-sm text-dim font-light mb-4">
+          Switch to Tempo Testnet to send payments.
+        </p>
         <button
           onClick={() =>
             switchChain({
@@ -146,31 +129,50 @@ export function SendPayment() {
       <div className="space-y-4">
         <div className="bg-card border border-accent/20 rounded-xl p-6 text-center">
           <div className="w-12 h-12 border border-accent rounded-xl flex items-center justify-center mx-auto mb-4">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-accent">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="text-accent"
+            >
               <path d="M5 13l4 4L19 7" />
             </svg>
           </div>
           <h3 className="text-lg font-medium text-accent mb-2">Payment Sent</h3>
           <p className="text-sm text-dim font-light mb-4">
-            {amount} pathUSD sent to a stealth address. The recipient can detect and sweep it.
+            {amount} pathUSD sent to a stealth address. The recipient can detect
+            and sweep it.
           </p>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-5">
-          <h3 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">Transaction Details</h3>
+          <h3 className="font-mono text-xs text-muted uppercase tracking-wider mb-3">
+            Transaction Details
+          </h3>
           <div className="space-y-2.5">
             <div>
-              <span className="font-mono text-[10px] text-muted block mb-1">stealth address</span>
-              <span className="font-mono text-[11px] text-[#e8e8ed] break-all">{stealthAddr}</span>
+              <span className="font-mono text-[10px] text-muted block mb-1">
+                stealth address
+              </span>
+              <span className="font-mono text-[11px] text-[#e8e8ed] break-all">
+                {stealthAddr}
+              </span>
             </div>
             <div className="h-px bg-border" />
             <div>
-              <span className="font-mono text-[10px] text-muted block mb-1">transfer tx</span>
+              <span className="font-mono text-[10px] text-muted block mb-1">
+                transfer tx
+              </span>
               <TxLink hash={transferHash} />
             </div>
             <div className="h-px bg-border" />
             <div>
-              <span className="font-mono text-[10px] text-muted block mb-1">announce tx</span>
+              <span className="font-mono text-[10px] text-muted block mb-1">
+                announce tx
+              </span>
               <TxLink hash={announceHash} />
             </div>
           </div>
@@ -189,7 +191,9 @@ export function SendPayment() {
 
   return (
     <div className="bg-card border border-border rounded-xl p-6">
-      <h3 className="text-lg font-medium text-[#e8e8ed] mb-1">Send Private Payment</h3>
+      <h3 className="text-lg font-medium text-[#e8e8ed] mb-1">
+        Send Private Payment
+      </h3>
       <p className="text-sm text-dim font-light mb-5">
         Paste the recipient's meta-address to send them a stealth payment.
       </p>

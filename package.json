@@ -1,6 +1,7 @@
 {
   "name": "stealthpay",
   "private": true,
+  "packageManager": "bun@1.3.0",
   "workspaces": ["apps/*", "packages/sdk"],
   "scripts": {
     "dev": "turbo dev",
