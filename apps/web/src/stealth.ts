@@ -35,6 +35,11 @@ export interface KeygenResult {
   metaAddress: string;
 }
 
+export function generateKeysFromSignature(signature: `0x${string}`): KeygenResult {
+  const rootKey = keccak256(signature);
+  return generateKeys(rootKey as `0x${string}`);
+}
+
 export function generateKeys(rootKey: `0x${string}`): KeygenResult {
   const spendingKeyBytes = hexToBytes(rootKey);
   const spendingPubKey = secp.getPublicKey(spendingKeyBytes, true);
