@@ -11,7 +11,7 @@ import {
   type NoteSecrets,
 } from "../lib/pool";
 import { generateWithdrawProof } from "../lib/prover";
-import { PATHUSD, POOL_ADDRESS } from "../config";
+import { PATHUSD, POOL_ADDRESS, CONTRACTS } from "../config";
 import { TxLink } from "./TxLink";
 
 const poolAbi = parseAbi([
@@ -59,15 +59,47 @@ export function Redeem() {
 
     try {
       // 1. Fetch all deposits to build Merkle tree
+      // Query from pool deployment block to ensure we get ALL notes
+      const POOL_DEPLOY_BLOCK = CONTRACTS.poolDeployBlock;
       const currentBlock = await publicClient.getBlockNumber();
       const logs = await publicClient.getLogs({
         address: POOL_ADDRESS as `0x${string}`,
         event: depositedEvent,
-        fromBlock: currentBlock - 50000n,
+        fromBlock: POOL_DEPLOY_BLOCK,
         toBlock: currentBlock,
       });
 
-      const noteCommitments = logs.map((l) => l.args.noteCommitment!);
+      // Sort by noteIndex to ensure correct Merkle tree order
+      const sortedLogs = [...logs].sort(
+        (a, b) => Number(a.args.noteIndex!) - Number(b.args.noteIndex!)
+      );
+      const noteCommitments = sortedLogs.map((l) => l.args.noteCommitment!);
+
+      // Check if nullifier is already spent
+      const { computeNullifier } = await import("../lib/pool");
+      const nullifierCheck = await computeNullifier(
+        note.secrets.noteCommitment,
+        note.secrets.recipientPubKey
+      );
+      const poolAbiRead = parseAbi([
+        "function spentNullifiers(uint256) view returns (bool)",
+      ]);
+      const isSpent = await publicClient.readContract({
+        address: POOL_ADDRESS as `0x${string}`,
+        abi: poolAbiRead,
+        functionName: "spentNullifiers",
+        args: [nullifierCheck],
+      });
+      if (isSpent) {
+        setError("This note has already been withdrawn");
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.noteIndex === note.noteIndex ? { ...n, redeeming: false } : n
+          )
+        );
+        removeNoteFromStorage(note.noteIndex);
+        return;
+      }
 
       // 2. Generate ZK proof
       const { proof, nullifier, merkleRoot } = await generateWithdrawProof(

@@ -35,6 +35,7 @@ export const CONTRACTS = {
   verifier: "0x6a701f74126f0D3cED8b1BD85fb9CF0DDd08C371" as `0x${string}`,
   poseidonT3: "0x5029d3168dC40ed0543f4444B386Fa1E8B9ac5a0" as `0x${string}`,
   poseidonT6: "0x845D9Cb9C57AAd0E878783BeA7387209a4DC38C4" as `0x${string}`,
+  poolDeployBlock: 10090849n,
 } as const;
 
 // Backwards compat exports

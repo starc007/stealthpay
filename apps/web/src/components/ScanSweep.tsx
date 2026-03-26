@@ -164,7 +164,7 @@ export function ScanSweep() {
   };
 
   const sweepToPool = async (payment: DetectedPayment): Promise<string | null> => {
-    const gasReserve = 20000n; // slightly more for approve + deposit (2 txs)
+    const gasReserve = 200000n; // 0.20 pathUSD for approve + deposit (Poseidon is expensive)
     const depositAmount = payment.balance > gasReserve ? payment.balance - gasReserve : 0n;
     if (depositAmount === 0n) return null;
 
