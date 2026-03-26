@@ -37,6 +37,7 @@ const keys = generateStealthKeys("0xYOUR_ROOT_PRIVATE_KEY");
 ```
 
 **Key separation:**
+
 - **Spending key** = root private key. Needed to sweep funds. Keep in cold storage.
 - **Viewing key** = keccak256(root key). Can detect payments but NOT spend them. Safe to share with the scanner service.
 
@@ -49,20 +50,26 @@ import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 const account = privateKeyToAccount("0xYOUR_KEY");
-const client = createWalletClient({ account, chain: tempoChain, transport: http(RPC_URL) });
+const client = createWalletClient({
+  account,
+  chain: tempoChain,
+  transport: http(RPC_URL),
+});
 
 await client.writeContract({
   address: REGISTRY_ADDRESS,
-  abi: [{
-    name: "registerKeys",
-    type: "function",
-    inputs: [
-      { name: "schemeId", type: "uint256" },
-      { name: "stealthMetaAddress", type: "bytes" }
-    ],
-    outputs: [],
-    stateMutability: "nonpayable"
-  }],
+  abi: [
+    {
+      name: "registerKeys",
+      type: "function",
+      inputs: [
+        { name: "schemeId", type: "uint256" },
+        { name: "stealthMetaAddress", type: "bytes" },
+      ],
+      outputs: [],
+      stateMutability: "nonpayable",
+    },
+  ],
   functionName: "registerKeys",
   args: [1n, keys.metaAddress.encoded], // schemeId 1 = secp256k1
 });
@@ -95,20 +102,25 @@ The sender only needs the recipient's public meta-address.
 ```typescript
 import { createPublicClient, http } from "viem";
 
-const publicClient = createPublicClient({ chain: tempoChain, transport: http(RPC_URL) });
+const publicClient = createPublicClient({
+  chain: tempoChain,
+  transport: http(RPC_URL),
+});
 
 const metaAddressBytes = await publicClient.readContract({
   address: REGISTRY_ADDRESS,
-  abi: [{
-    name: "stealthMetaAddressOf",
-    type: "function",
-    inputs: [
-      { name: "registrant", type: "address" },
-      { name: "schemeId", type: "uint256" }
-    ],
-    outputs: [{ type: "bytes" }],
-    stateMutability: "view"
-  }],
+  abi: [
+    {
+      name: "stealthMetaAddressOf",
+      type: "function",
+      inputs: [
+        { name: "registrant", type: "address" },
+        { name: "schemeId", type: "uint256" },
+      ],
+      outputs: [{ type: "bytes" }],
+      stateMutability: "view",
+    },
+  ],
   functionName: "stealthMetaAddressOf",
   args: [recipientAddress, 1n],
 });
@@ -120,7 +132,8 @@ const metaAddressBytes = await publicClient.readContract({
 import { computeStealthAddress, parseMetaAddress } from "stealthpay-tempo";
 
 const recipientMeta = parseMetaAddress(metaAddressBytes);
-const { stealthAddress, ephemeralPubKey, viewTag } = computeStealthAddress(recipientMeta);
+const { stealthAddress, ephemeralPubKey, viewTag } =
+  computeStealthAddress(recipientMeta);
 ```
 
 ### Transfer tokens + announce (two transactions)
@@ -140,18 +153,20 @@ const metadata = `0x${viewTag.toString(16).padStart(2, "0")}${TOKEN_ADDRESS.slic
 
 const announceTx = await walletClient.writeContract({
   address: ANNOUNCER_ADDRESS,
-  abi: [{
-    name: "announce",
-    type: "function",
-    inputs: [
-      { name: "schemeId", type: "uint256" },
-      { name: "stealthAddress", type: "address" },
-      { name: "ephemeralPubKey", type: "bytes" },
-      { name: "metadata", type: "bytes" }
-    ],
-    outputs: [],
-    stateMutability: "nonpayable"
-  }],
+  abi: [
+    {
+      name: "announce",
+      type: "function",
+      inputs: [
+        { name: "schemeId", type: "uint256" },
+        { name: "stealthAddress", type: "address" },
+        { name: "ephemeralPubKey", type: "bytes" },
+        { name: "metadata", type: "bytes" },
+      ],
+      outputs: [],
+      stateMutability: "nonpayable",
+    },
+  ],
   functionName: "announce",
   args: [1n, stealthAddress, ephemeralPubKey, metadata],
 });
@@ -173,6 +188,7 @@ curl -X POST https://your-api.com/scan \
 ```
 
 Response:
+
 ```json
 {
   "ok": true,
@@ -197,14 +213,16 @@ import { scanStealthAddress } from "stealthpay-tempo";
 const { expectedAddress, viewTag: expectedViewTag } = scanStealthAddress(
   announcement.ephemeralPubKey,
   myKeys.viewingKey,
-  myKeys.metaAddress.spendingPubKey
+  myKeys.metaAddress.spendingPubKey,
 );
 
 // Quick filter: check view tag first (cheap byte comparison)
 if (expectedViewTag !== announcement.viewTag) continue;
 
 // Full check: compare addresses
-if (expectedAddress.toLowerCase() === announcement.stealthAddress.toLowerCase()) {
+if (
+  expectedAddress.toLowerCase() === announcement.stealthAddress.toLowerCase()
+) {
   console.log("Payment detected!", announcement.stealthAddress);
 }
 ```
@@ -238,7 +256,7 @@ const stealthPrivKey = checkStealthAddress(
   payment.ephemeralPubKey,
   myKeys.spendingKey,
   myKeys.viewingKey,
-  payment.stealthAddress
+  payment.stealthAddress,
 );
 
 if (stealthPrivKey) {
@@ -272,7 +290,7 @@ const recipientKeys = generateStealthKeys("0xRECIPIENT_ROOT_KEY");
 
 // ── SENDER ──
 const { stealthAddress, ephemeralPubKey, viewTag } = computeStealthAddress(
-  recipientKeys.metaAddress
+  recipientKeys.metaAddress,
 );
 // Transfer tokens to stealthAddress...
 // Call announcer.announce(1, stealthAddress, ephemeralPubKey, metadata)...
@@ -282,7 +300,7 @@ const stealthPrivKey = checkStealthAddress(
   ephemeralPubKey,
   recipientKeys.spendingKey,
   recipientKeys.viewingKey,
-  stealthAddress
+  stealthAddress,
 );
 // stealthPrivKey is not null — this payment is ours!
 
@@ -335,34 +353,38 @@ No API keys needed — the agent pays per request via Tempo micropayments.
 
 ## Contract Addresses
 
-| Contract | Testnet (Moderato, chain 42431) | Mainnet |
-|---|---|---|
-| StealthRegistry | `0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4` | TBD |
-| StealthAnnouncer | `0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88` | TBD |
-| pathUSD | `0x20c0000000000000000000000000000000000000` | — |
+| Contract         | Testnet (Moderato, chain 42431)              | Mainnet |
+| ---------------- | -------------------------------------------- | ------- |
+| StealthRegistry  | `0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4` | TBD     |
+| StealthAnnouncer | `0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88` | TBD     |
+| pathUSD          | `0x20c0000000000000000000000000000000000000` | —       |
 
 ## Scheme IDs
 
-| ID | Scheme | Status |
-|---|---|---|
-| 1 | secp256k1 ECDH | Supported |
+| ID  | Scheme         | Status    |
+| --- | -------------- | --------- |
+| 1   | secp256k1 ECDH | Supported |
 
 ## Common Issues
 
 **Payment not detected by scanner:**
+
 - Ensure you called `announce()` after transferring tokens
 - Check that the recipient registered with the scanner API (not just on-chain)
 - View tag in metadata must match: first byte of `keccak256(sharedSecret)`
 
 **Sweep fails with "Could not derive stealth key":**
+
 - The spending key doesn't match the registered meta-address
 - The announcement's ephemeral pubkey might be corrupted
 
 **Sweep reverts with insufficient balance:**
+
 - On Tempo, gas fees are paid in pathUSD (not a separate native token)
 - When sweeping, reserve ~0.01 pathUSD for gas: `sweepAmount = balance - 10000n`
 - A transfer costs ~0.005 pathUSD in gas at current rates
 
 **Zero balance at stealth address:**
+
 - Tokens were already swept or never arrived
 - Check the token address is correct
