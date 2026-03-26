@@ -5,9 +5,10 @@ import { Footer } from "./components/Footer";
 import { ConnectWallet } from "./components/ConnectWallet";
 import { GenerateKeys } from "./components/GenerateKeys";
 import { SendPayment } from "./components/SendPayment";
+import { ScanSweep } from "./components/ScanSweep";
 import { WalletHeader } from "./components/WalletHeader";
 
-type Tab = "receive" | "send";
+type Tab = "receive" | "send" | "scan";
 
 function Dashboard() {
   const [tab, setTab] = useState<Tab>("receive");
@@ -40,9 +41,20 @@ function Dashboard() {
         >
           Send
         </button>
+        <button
+          onClick={() => setTab("scan")}
+          type="button"
+          className={`flex-1 font-mono text-sm py-2 rounded-md transition-all cursor-pointer ${
+            tab === "scan"
+              ? "bg-accent/10 text-accent border border-accent/20"
+              : "text-muted hover:text-dim border border-transparent"
+          }`}
+        >
+          Scan
+        </button>
       </div>
 
-      {tab === "receive" ? <GenerateKeys /> : <SendPayment />}
+      {tab === "receive" ? <GenerateKeys /> : tab === "send" ? <SendPayment /> : <ScanSweep />}
     </div>
   );
 }
