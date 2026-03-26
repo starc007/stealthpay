@@ -1,5 +1,6 @@
 import { http, createConfig } from "wagmi";
 import { tempoTestnet } from "viem/chains";
+import { metaMask } from "wagmi/connectors";
 import { webAuthn, KeyManager } from "wagmi/tempo";
 
 export { tempoTestnet };
@@ -10,8 +11,9 @@ export const wagmiConfig = createConfig({
     webAuthn({
       keyManager: KeyManager.localStorage(),
     }),
+    metaMask(),
   ],
-  multiInjectedProviderDiscovery: false,
+  multiInjectedProviderDiscovery: true,
   transports: {
     [tempoTestnet.id]: http(),
   },
