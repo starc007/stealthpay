@@ -109,8 +109,8 @@ contract StealthPool {
         if (amount == 0) revert ZeroAmount();
 
         // Transfer tokens from depositor (stealth address) to pool
-        bool ok = IERC20(token).transferFrom(msg.sender, address(this), amount);
-        if (!ok) revert TransferFailed();
+        // Use low-level call for TIP-20 compatibility (may not return bool)
+        _safeTransferFrom(token, msg.sender, address(this), amount);
 
         // Insert note into Merkle tree
         uint256 noteIndex = _insertLeaf(noteCommitment);
@@ -159,8 +159,7 @@ contract StealthPool {
 
         spentNullifiers[nullifier] = true;
 
-        bool ok = IERC20(token).transfer(recipient, amount);
-        if (!ok) revert TransferFailed();
+        _safeTransfer(token, recipient, amount);
 
         emit Withdrawn(nullifier, recipient, token, amount);
     }
@@ -175,6 +174,24 @@ contract StealthPool {
 
     function getNoteCount() external view returns (uint256) {
         return noteCount;
+    }
+
+    // ================================================================
+    // Internal — Safe ERC20 (TIP-20 compatible)
+    // ================================================================
+
+    function _safeTransferFrom(address token, address from, address to, uint256 amount) internal {
+        (bool success, ) = token.call(
+            abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, amount)
+        );
+        if (!success) revert TransferFailed();
+    }
+
+    function _safeTransfer(address token, address to, uint256 amount) internal {
+        (bool success, ) = token.call(
+            abi.encodeWithSelector(IERC20.transfer.selector, to, amount)
+        );
+        if (!success) revert TransferFailed();
     }
 
     // ================================================================

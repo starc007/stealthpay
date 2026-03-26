@@ -82,7 +82,7 @@ contract StealthPoolTest is Test {
         token.mint(noApproval, DEPOSIT_AMOUNT);
 
         vm.prank(noApproval);
-        vm.expectRevert("not approved");
+        vm.expectRevert(StealthPool.TransferFailed.selector);
         pool.deposit(address(token), DEPOSIT_AMOUNT, NOTE_COMMITMENT);
     }
 
