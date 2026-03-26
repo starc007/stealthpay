@@ -1,12 +1,14 @@
 import { useState } from "react";
+import { useAccount, usePublicClient, useSignMessage } from "wagmi";
 import {
-  useAccount,
-  usePublicClient,
-  useSignMessage,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
-import { parseAbi, formatUnits, parseAbiItem } from "viem";
+  createWalletClient,
+  http,
+  parseAbi,
+  formatUnits,
+  parseAbiItem,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { tempoModerato } from "viem/chains";
 import {
   generateStealthKeysFromSignature,
   checkStealthAddress,
@@ -31,35 +33,37 @@ interface DetectedPayment {
   balance: bigint;
   blockNumber: bigint;
   txHash: string;
+  sweepTxHash?: string;
+  sweeping?: boolean;
 }
 
 export function ScanSweep() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
-  const { writeContractAsync } = useWriteContract();
 
   const [keys, setKeys] = useState<StealthKeys | null>(null);
   const [payments, setPayments] = useState<DetectedPayment[]>([]);
   const [scanning, setScanning] = useState(false);
-  const [sweeping, setSweeping] = useState<string | null>(null);
-  const [sweptTxs, setSweptTxs] = useState<Record<string, string>>({});
+  const [sweepingAll, setSweepingAll] = useState(false);
   const [error, setError] = useState("");
   const [scanComplete, setScanComplete] = useState(false);
 
-  const handleUnlock = async () => {
+  const handleUnlockAndScan = async () => {
     setError("");
     try {
       const signature = await signMessageAsync({ message: STEALTH_KEY_MESSAGE });
       const result = generateStealthKeysFromSignature(signature as `0x${string}`);
       setKeys(result);
+      // Auto-scan after unlocking
+      await scanChain(result);
     } catch (e: any) {
       setError(e.message?.includes("rejected") ? "Signature rejected" : (e.message || "Failed"));
     }
   };
 
-  const handleScan = async () => {
-    if (!keys || !publicClient) return;
+  const scanChain = async (stealthKeys: StealthKeys) => {
+    if (!publicClient) return;
     setScanning(true);
     setError("");
     setPayments([]);
@@ -67,7 +71,6 @@ export function ScanSweep() {
 
     try {
       const currentBlock = await publicClient.getBlockNumber();
-      // Scan last 10000 blocks (adjust as needed)
       const fromBlock = currentBlock > 10000n ? currentBlock - 10000n : 0n;
 
       const logs = await publicClient.getLogs({
@@ -87,16 +90,14 @@ export function ScanSweep() {
 
         if (!stealthAddress || !ephemeralPubKey) continue;
 
-        // Check if this payment belongs to us
         const stealthPrivKey = checkStealthAddress(
           ephemeralPubKey,
-          keys.spendingKey,
-          keys.viewingKey,
+          stealthKeys.spendingKey,
+          stealthKeys.viewingKey,
           stealthAddress
         );
 
         if (stealthPrivKey) {
-          // Check balance
           const balance = await publicClient.readContract({
             address: PATHUSD as `0x${string}`,
             abi: erc20Abi,
@@ -124,47 +125,72 @@ export function ScanSweep() {
     }
   };
 
-  const handleSweep = async (payment: DetectedPayment) => {
-    if (!address) return;
-    setSweeping(payment.stealthAddress);
-    setError("");
+  const sweepOne = async (payment: DetectedPayment): Promise<string | null> => {
+    if (!address) return null;
 
-    try {
-      // Reserve gas (pathUSD is the fee token)
-      const gasReserve = 10000n; // 0.01 pathUSD
-      const sweepAmount = payment.balance > gasReserve ? payment.balance - gasReserve : 0n;
+    const gasReserve = 10000n; // 0.01 pathUSD
+    const sweepAmount = payment.balance > gasReserve ? payment.balance - gasReserve : 0n;
+    if (sweepAmount === 0n) return null;
 
-      if (sweepAmount === 0n) {
-        setError("Balance too low to cover gas");
-        setSweeping(null);
-        return;
-      }
+    // Create a wallet client with the stealth private key
+    const stealthAccount = privateKeyToAccount(payment.stealthPrivKey as `0x${string}`);
+    const stealthClient = createWalletClient({
+      account: stealthAccount,
+      chain: tempoModerato,
+      transport: http(),
+    });
 
-      const txHash = await writeContractAsync({
-        address: PATHUSD as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "transfer",
-        args: [address, sweepAmount],
-        account: { address: payment.stealthAddress as `0x${string}`, type: "json-rpc" },
-      });
+    const txHash = await stealthClient.writeContract({
+      address: PATHUSD as `0x${string}`,
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [address, sweepAmount],
+    });
 
-      setSweptTxs((prev) => ({ ...prev, [payment.stealthAddress]: txHash }));
-      // Update balance
-      setPayments((prev) =>
-        prev.map((p) =>
-          p.stealthAddress === payment.stealthAddress ? { ...p, balance: 0n } : p
-        )
-      );
-    } catch (e: any) {
-      // If wagmi can't sign with stealth key directly, we need a different approach
-      // For now show the stealth private key so user can sweep manually
-      setError(`Auto-sweep not available in browser. Use the API or CLI to sweep with the stealth private key.`);
-    } finally {
-      setSweeping(null);
-    }
+    return txHash;
   };
 
-  // Step 1: Unlock keys
+  const handleSweepAll = async () => {
+    setSweepingAll(true);
+    setError("");
+
+    const sweepable = payments.filter((p) => p.balance > 10000n && !p.sweepTxHash);
+
+    for (const payment of sweepable) {
+      // Mark as sweeping
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.stealthAddress === payment.stealthAddress ? { ...p, sweeping: true } : p
+        )
+      );
+
+      try {
+        const txHash = await sweepOne(payment);
+        setPayments((prev) =>
+          prev.map((p) =>
+            p.stealthAddress === payment.stealthAddress
+              ? { ...p, sweeping: false, sweepTxHash: txHash || undefined, balance: 0n }
+              : p
+          )
+        );
+      } catch (e: any) {
+        setPayments((prev) =>
+          prev.map((p) =>
+            p.stealthAddress === payment.stealthAddress ? { ...p, sweeping: false } : p
+          )
+        );
+        setError(e.shortMessage || e.message || "Sweep failed");
+        break;
+      }
+    }
+
+    setSweepingAll(false);
+  };
+
+  const totalBalance = payments.reduce((sum, p) => sum + p.balance, 0n);
+  const sweepableCount = payments.filter((p) => p.balance > 10000n && !p.sweepTxHash).length;
+
+  // Step 1: Unlock + scan
   if (!keys) {
     return (
       <div className="bg-card border border-border rounded-xl p-6 text-center">
@@ -175,120 +201,134 @@ export function ScanSweep() {
         </div>
         <h3 className="text-lg font-medium text-[#e8e8ed] mb-2">Scan for Payments</h3>
         <p className="text-sm text-dim font-light mb-6 max-w-sm mx-auto">
-          Sign a message to unlock your stealth keys, then scan the chain for payments sent to you.
+          Sign to unlock your stealth keys and scan for incoming payments.
         </p>
         <button
-          onClick={handleUnlock}
+          onClick={handleUnlockAndScan}
           disabled={isSigning}
           type="button"
           className="border border-accent text-accent font-mono text-sm px-6 py-2.5 rounded-lg hover:bg-accent hover:text-[#0a0a0c] hover:shadow-[0_0_20px_var(--color-accent-glow)] transition-all disabled:opacity-40 cursor-pointer"
         >
-          {isSigning ? "Check your wallet..." : "Unlock & Scan"}
+          {isSigning ? "Check your wallet..." : "Scan for Payments"}
         </button>
         {error && <p className="mt-3 text-sm text-danger font-mono">{error}</p>}
       </div>
     );
   }
 
-  // Step 2: Scan & results
+  // Step 2: Results
   return (
     <div className="space-y-4">
-      {/* Scan button */}
-      <div className="flex items-center justify-between">
-        <h3 className="font-mono text-sm font-medium text-[#e8e8ed]">
-          {scanComplete
-            ? `${payments.length} payment${payments.length !== 1 ? "s" : ""} found`
-            : "Ready to scan"}
-        </h3>
-        <button
-          onClick={handleScan}
-          disabled={scanning}
-          type="button"
-          className="border border-accent text-accent font-mono text-xs px-4 py-2 rounded-lg hover:bg-accent hover:text-[#0a0a0c] transition-all disabled:opacity-40 cursor-pointer"
-        >
-          {scanning ? "Scanning..." : scanComplete ? "Scan Again" : "Scan Chain"}
-        </button>
-      </div>
-
       {scanning && (
         <div className="bg-card border border-border rounded-xl p-6 text-center">
           <div className="animate-pulse text-dim font-mono text-sm">
-            Scanning announcements...
+            Scanning the chain...
           </div>
           <p className="text-[11px] text-muted mt-2">
-            Checking each announcement against your viewing key
+            Checking announcements against your viewing key
           </p>
+        </div>
+      )}
+
+      {scanComplete && payments.length === 0 && (
+        <div className="bg-card border border-border rounded-xl p-6 text-center">
+          <p className="text-sm text-dim">No payments found.</p>
+          <p className="text-[11px] text-muted mt-1">
+            Share your meta-address in the Receive tab, then come back here.
+          </p>
+        </div>
+      )}
+
+      {/* Summary + sweep all */}
+      {scanComplete && payments.length > 0 && (
+        <div className="bg-card border border-accent/20 rounded-xl p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-mono text-lg text-accent font-medium">
+                {formatUnits(totalBalance, 6)} pathUSD
+              </p>
+              <p className="text-[11px] text-dim mt-0.5">
+                {payments.length} payment{payments.length !== 1 ? "s" : ""} detected
+              </p>
+            </div>
+            {sweepableCount > 0 && (
+              <button
+                onClick={handleSweepAll}
+                disabled={sweepingAll}
+                type="button"
+                className="border border-accent text-accent font-mono text-sm px-5 py-2.5 rounded-lg hover:bg-accent hover:text-[#0a0a0c] hover:shadow-[0_0_20px_var(--color-accent-glow)] transition-all disabled:opacity-40 cursor-pointer"
+              >
+                {sweepingAll ? "Sweeping..." : `Sweep All to Wallet`}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       {/* Payment list */}
-      {scanComplete && payments.length === 0 && (
-        <div className="bg-card border border-border rounded-xl p-6 text-center">
-          <p className="text-sm text-dim">No stealth payments found.</p>
-          <p className="text-[11px] text-muted mt-1">
-            Ask someone to send to your meta-address, then scan again.
-          </p>
-        </div>
-      )}
-
-      {payments.map((payment) => {
-        const swept = sweptTxs[payment.stealthAddress];
-        const isEmpty = payment.balance === 0n;
-
-        return (
-          <div
-            key={payment.stealthAddress}
-            className={`bg-card border rounded-xl p-5 ${
-              isEmpty ? "border-border opacity-60" : "border-accent/20"
-            }`}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-mono text-sm text-accent">
-                {isEmpty ? "Swept" : `${formatUnits(payment.balance, 6)} pathUSD`}
-              </span>
-              <span className="font-mono text-[10px] text-muted">
-                block {payment.blockNumber.toString()}
+      {payments.map((payment) => (
+        <div
+          key={payment.stealthAddress}
+          className={`bg-card border rounded-xl p-4 ${
+            payment.sweepTxHash
+              ? "border-[#1a3a2a] opacity-70"
+              : payment.sweeping
+                ? "border-accent/40"
+                : "border-border"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {payment.sweepTxHash ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent shrink-0">
+                  <path d="M5 13l4 4L19 7" />
+                </svg>
+              ) : payment.sweeping ? (
+                <div className="w-3.5 h-3.5 border-2 border-accent/40 border-t-accent rounded-full animate-spin shrink-0" />
+              ) : (
+                <div className="w-3.5 h-3.5 rounded-full border border-border shrink-0" />
+              )}
+              <span className="font-mono text-sm text-[#e8e8ed]">
+                {payment.sweepTxHash
+                  ? "Swept"
+                  : payment.sweeping
+                    ? "Sweeping..."
+                    : `${formatUnits(payment.balance, 6)} pathUSD`}
               </span>
             </div>
-
-            <div className="space-y-2">
-              <div>
-                <span className="font-mono text-[10px] text-muted block mb-0.5">stealth address</span>
-                <span className="font-mono text-[11px] text-dim break-all">{payment.stealthAddress}</span>
-              </div>
-              <div className="h-px bg-border" />
-              <div>
-                <span className="font-mono text-[10px] text-muted block mb-0.5">stealth private key</span>
-                <span className="font-mono text-[11px] text-warning break-all">{payment.stealthPrivKey}</span>
-              </div>
-            </div>
-
-            {!isEmpty && !swept && (
-              <div className="mt-3 pt-3 border-t border-border">
-                <p className="text-[11px] text-dim mb-2">
-                  Import this private key into your wallet or use the CLI to sweep funds to your address.
-                </p>
-              </div>
-            )}
-
-            {swept && (
-              <div className="mt-3 pt-3 border-t border-border">
-                <span className="font-mono text-[10px] text-muted block mb-0.5">sweep tx</span>
-                <span className="font-mono text-[11px] text-accent break-all">{swept}</span>
-              </div>
-            )}
+            <span className="font-mono text-[10px] text-muted">
+              {payment.stealthAddress.slice(0, 8)}...{payment.stealthAddress.slice(-6)}
+            </span>
           </div>
-        );
-      })}
+
+          {payment.sweepTxHash && (
+            <p className="font-mono text-[10px] text-dim mt-2 break-all pl-5.5">
+              tx: {payment.sweepTxHash}
+            </p>
+          )}
+        </div>
+      ))}
 
       {error && <p className="text-xs text-danger font-mono">{error}</p>}
 
-      <button
-        onClick={() => { setKeys(null); setPayments([]); setScanComplete(false); setError(""); }}
-        className="w-full text-xs text-muted hover:text-dim font-mono transition-colors cursor-pointer py-2"
-      >
-        lock keys
-      </button>
+      {/* Actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => keys && scanChain(keys)}
+          disabled={scanning}
+          type="button"
+          className="flex-1 text-xs text-muted hover:text-dim font-mono transition-colors cursor-pointer py-2 border border-border rounded-lg hover:border-border-active"
+        >
+          {scanning ? "Scanning..." : "Rescan"}
+        </button>
+        <button
+          onClick={() => { setKeys(null); setPayments([]); setScanComplete(false); setError(""); }}
+          type="button"
+          className="flex-1 text-xs text-muted hover:text-dim font-mono transition-colors cursor-pointer py-2 border border-border rounded-lg hover:border-border-active"
+        >
+          Lock
+        </button>
+      </div>
     </div>
   );
 }
