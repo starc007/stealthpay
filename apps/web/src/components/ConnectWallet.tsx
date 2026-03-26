@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useConnect, useConnectors } from "wagmi";
 
+const EXCLUDED_WALLETS = ["app.backpack", "app.phantom"];
+
 export function ConnectWallet() {
   const connectors = useConnectors();
   const connect = useConnect();
@@ -10,7 +12,10 @@ export function ConnectWallet() {
     [connectors]
   );
   const walletConnectors = useMemo(
-    () => connectors.filter((c) => c.id !== "webAuthn"),
+    () =>
+      connectors.filter(
+        (c) => c.id !== "webAuthn" && !EXCLUDED_WALLETS.includes(c.id)
+      ),
     [connectors]
   );
 

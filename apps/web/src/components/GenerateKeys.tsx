@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAccount, useDisconnect, useSignMessage } from "wagmi";
+import { useAccount, useChains, useDisconnect, useSignMessage, useSwitchChain } from "wagmi";
 import {
   generateStealthKeysFromSignature,
   STEALTH_KEY_MESSAGE,
@@ -13,9 +13,13 @@ function truncate(hex: string, n = 8): string {
 }
 
 export function GenerateKeys() {
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
+  const chains = useChains();
   const { disconnect } = useDisconnect();
+  const { switchChain } = useSwitchChain();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
+
+  const isSupportedChain = chains.some((c) => c.id === chainId);
   const [keys, setKeys] = useState<StealthKeys | null>(null);
   const [error, setError] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
@@ -79,7 +83,28 @@ export function GenerateKeys() {
         </button>
       </div>
 
-      {!keys ? (
+      {!isSupportedChain ? (
+        <div className="bg-card border border-warning/20 rounded-xl p-6 text-center">
+          <h3 className="text-lg font-medium text-[#e8e8ed] mb-2">Wrong Network</h3>
+          <p className="text-sm text-dim font-light mb-4">
+            Switch to Tempo Testnet to continue.
+          </p>
+          <button
+            onClick={() =>
+              switchChain({
+                chainId: chains[0].id,
+                addEthereumChainParameter: {
+                  nativeCurrency: { name: "USD", decimals: 18, symbol: "USD" },
+                },
+              })
+            }
+            type="button"
+            className="border border-accent text-accent font-mono text-sm px-6 py-2.5 rounded-lg hover:bg-accent hover:text-[#0a0a0c] hover:shadow-[0_0_20px_var(--color-accent-glow)] transition-all cursor-pointer"
+          >
+            Switch to Tempo Testnet
+          </button>
+        </div>
+      ) : !keys ? (
         <div className="bg-card border border-border rounded-xl p-6 text-center">
           <div className="w-12 h-12 border border-border-active rounded-xl flex items-center justify-center mx-auto mb-4">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-accent">
