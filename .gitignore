@@ -15,3 +15,5 @@ docs/superpowers/
 # Env
 .env
 .env.local
+
+apps/api/local.db
