@@ -29,11 +29,10 @@
       "name": "stealthpay-web",
       "version": "0.0.0",
       "dependencies": {
-        "@noble/hashes": "^2.0.1",
-        "@noble/secp256k1": "^3.0.0",
         "@tanstack/react-query": "^5.95.2",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
+        "stealthpay-tempo": "workspace:*",
         "viem": "^2.47.6",
         "wagmi": "^3.6.0",
       },
@@ -857,10 +856,6 @@
     "lightningcss/detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 
     "rolldown/@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-rc.12", "", {}, "sha512-HHMwmarRKvoFsJorqYlFeFRzXZqCt2ETQlEDOb9aqssrnVBB1/+xgTGtuTrIk5vzLNX1MjMtTf7W9z3tsSbrxw=="],
-
-    "stealthpay-web/@noble/hashes": ["@noble/hashes@2.0.1", "", {}, "sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw=="],
-
-    "stealthpay-web/@noble/secp256k1": ["@noble/secp256k1@3.0.0", "", {}, "sha512-NJBaR352KyIvj3t6sgT/+7xrNyF9Xk9QlLSIqUGVUYlsnDTAUqY8LOmwpcgEx4AMJXRITQ5XEVHD+mMaPfr3mg=="],
 
     "@modelcontextprotocol/sdk/ajv/json-schema-traverse": ["json-schema-traverse@1.0.0", "", {}, "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug=="],
 

@@ -1,14 +1,22 @@
 import { useState } from "react";
 import { useConnection, useDisconnect, useSignMessage } from "wagmi";
-import { generateKeysFromSignature, truncate, type KeygenResult } from "../stealth";
-import { STEALTH_KEY_MESSAGE } from "../config";
+import {
+  generateStealthKeysFromSignature,
+  STEALTH_KEY_MESSAGE,
+  type StealthKeys,
+} from "stealthpay-tempo";
 import { CopyButton } from "./CopyButton";
+
+function truncate(hex: string, n = 8): string {
+  if (hex.length <= n * 2 + 4) return hex;
+  return hex.slice(0, n + 2) + "..." + hex.slice(-n);
+}
 
 export function GenerateKeys() {
   const { address } = useConnection();
   const { disconnect } = useDisconnect();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
-  const [keys, setKeys] = useState<KeygenResult | null>(null);
+  const [keys, setKeys] = useState<StealthKeys | null>(null);
   const [error, setError] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [registered, setRegistered] = useState(false);
@@ -17,7 +25,7 @@ export function GenerateKeys() {
     setError("");
     try {
       const signature = await signMessageAsync({ message: STEALTH_KEY_MESSAGE });
-      const result = generateKeysFromSignature(signature as `0x${string}`);
+      const result = generateStealthKeysFromSignature(signature as `0x${string}`);
       setKeys(result);
     } catch (e: any) {
       if (e.message?.includes("User rejected")) {
@@ -31,13 +39,14 @@ export function GenerateKeys() {
   const handleRegister = async () => {
     if (!keys) return;
     setIsRegistering(true);
+    setError("");
     try {
       const res = await fetch("http://localhost:3000/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           address,
-          stealthMetaAddress: keys.metaAddress,
+          stealthMetaAddress: keys.metaAddress.encoded,
           viewingKey: keys.viewingKey,
         }),
       });
@@ -96,10 +105,10 @@ export function GenerateKeys() {
           <div className="bg-card border border-accent/20 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-mono text-sm font-medium text-accent">Your Meta-Address</h3>
-              <CopyButton text={keys.metaAddress} />
+              <CopyButton text={keys.metaAddress.encoded} />
             </div>
             <p className="font-mono text-[11px] text-[#e8e8ed] break-all leading-relaxed bg-input rounded-lg p-3 border border-border">
-              {keys.metaAddress}
+              {keys.metaAddress.encoded}
             </p>
             <p className="text-[11px] text-dim mt-3 font-light">
               Share this with anyone who wants to send you a private payment. It cannot be used to see your balance or transaction history.
@@ -113,16 +122,16 @@ export function GenerateKeys() {
               <div className="flex items-center justify-between">
                 <span className="font-mono text-[11px] text-muted">spending pubkey</span>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-dim">{truncate(keys.spendingPubKey, 10)}</span>
-                  <CopyButton text={keys.spendingPubKey} />
+                  <span className="font-mono text-[11px] text-dim">{truncate(keys.metaAddress.spendingPubKey, 10)}</span>
+                  <CopyButton text={keys.metaAddress.spendingPubKey} />
                 </div>
               </div>
               <div className="h-px bg-border" />
               <div className="flex items-center justify-between">
                 <span className="font-mono text-[11px] text-muted">viewing pubkey</span>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-dim">{truncate(keys.viewingPubKey, 10)}</span>
-                  <CopyButton text={keys.viewingPubKey} />
+                  <span className="font-mono text-[11px] text-dim">{truncate(keys.metaAddress.viewingPubKey, 10)}</span>
+                  <CopyButton text={keys.metaAddress.viewingPubKey} />
                 </div>
               </div>
               <div className="h-px bg-border" />

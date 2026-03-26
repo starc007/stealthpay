@@ -1,12 +1,12 @@
 import { http, createConfig } from "wagmi";
-import { tempoTestnet } from "viem/chains";
+import { tempoModerato } from "viem/chains";
 import { metaMask } from "wagmi/connectors";
 import { webAuthn, KeyManager } from "wagmi/tempo";
 
-export { tempoTestnet };
+export { tempoModerato };
 
 export const wagmiConfig = createConfig({
-  chains: [tempoTestnet],
+  chains: [tempoModerato],
   connectors: [
     webAuthn({
       keyManager: KeyManager.localStorage(),
@@ -15,10 +15,9 @@ export const wagmiConfig = createConfig({
   ],
   multiInjectedProviderDiscovery: true,
   transports: {
-    [tempoTestnet.id]: http(),
+    [tempoModerato.id]: http(),
   },
 });
 
 export const REGISTRY_ADDRESS = "0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4";
 export const ANNOUNCER_ADDRESS = "0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88";
-export const STEALTH_KEY_MESSAGE = "Generate StealthPay stealth keys";
