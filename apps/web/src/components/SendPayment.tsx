@@ -12,6 +12,7 @@ import {
   parseMetaAddress,
 } from "stealthpay-tempo";
 import { PATHUSD, ANNOUNCER_ADDRESS } from "../config";
+import { TxLink } from "./TxLink";
 
 const erc20Abi = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -165,12 +166,12 @@ export function SendPayment() {
             <div className="h-px bg-border" />
             <div>
               <span className="font-mono text-[10px] text-muted block mb-1">transfer tx</span>
-              <span className="font-mono text-[11px] text-dim break-all">{transferHash}</span>
+              <TxLink hash={transferHash} />
             </div>
             <div className="h-px bg-border" />
             <div>
               <span className="font-mono text-[10px] text-muted block mb-1">announce tx</span>
-              <span className="font-mono text-[11px] text-dim break-all">{announceHash}</span>
+              <TxLink hash={announceHash} />
             </div>
           </div>
         </div>

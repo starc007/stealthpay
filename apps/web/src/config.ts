@@ -26,5 +26,7 @@ declare module "wagmi" {
   }
 }
 
+export const EXPLORER_URL = "https://explore.testnet.tempo.xyz";
+
 export const REGISTRY_ADDRESS = "0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4";
 export const ANNOUNCER_ADDRESS = "0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88";

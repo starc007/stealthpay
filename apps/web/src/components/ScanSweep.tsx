@@ -17,6 +17,7 @@ import {
   type StealthKeys,
 } from "stealthpay-tempo";
 import { ANNOUNCER_ADDRESS, PATHUSD } from "../config";
+import { TxLink } from "./TxLink";
 
 const erc20Abi = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -326,9 +327,9 @@ export function ScanSweep() {
           </div>
 
           {payment.sweepTxHash && (
-            <p className="font-mono text-[10px] text-dim mt-2 break-all pl-6">
-              tx: {payment.sweepTxHash}
-            </p>
+            <div className="mt-2 pl-6">
+              <TxLink hash={payment.sweepTxHash} />
+            </div>
           )}
         </div>
       ))}
