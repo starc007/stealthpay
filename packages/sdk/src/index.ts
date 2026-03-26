@@ -1,6 +1,8 @@
 // ── Key Generation ───────────────────────────────
 export {
   generateStealthKeys,
+  generateStealthKeysFromSignature,
+  STEALTH_KEY_MESSAGE,
   parseMetaAddress,
   type StealthMetaAddress,
   type StealthKeys,

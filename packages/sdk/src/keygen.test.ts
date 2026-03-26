@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { generateStealthKeys, parseMetaAddress } from "./keygen";
+import { generateStealthKeys, generateStealthKeysFromSignature, parseMetaAddress } from "./keygen";
 
 describe("keygen", () => {
   // A valid 32-byte hex private key
@@ -58,5 +58,32 @@ describe("parseMetaAddress", () => {
     expect(() => parseMetaAddress("0xdeadbeef" as `0x${string}`)).toThrow(
       "Invalid meta-address length"
     );
+  });
+});
+
+describe("generateStealthKeysFromSignature", () => {
+  const fakeSig = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab1c" as `0x${string}`;
+
+  it("generates valid keys from a signature", () => {
+    const keys = generateStealthKeysFromSignature(fakeSig);
+
+    expect(keys.spendingKey).toMatch(/^0x[a-f0-9]{64}$/);
+    expect(keys.viewingKey).toMatch(/^0x[a-f0-9]{64}$/);
+    expect(keys.metaAddress.encoded.length).toBe(134);
+  });
+
+  it("is deterministic — same signature produces same keys", () => {
+    const keys1 = generateStealthKeysFromSignature(fakeSig);
+    const keys2 = generateStealthKeysFromSignature(fakeSig);
+
+    expect(keys1.metaAddress.encoded).toBe(keys2.metaAddress.encoded);
+  });
+
+  it("different signatures produce different keys", () => {
+    const otherSig = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1b" as `0x${string}`;
+    const keys1 = generateStealthKeysFromSignature(fakeSig);
+    const keys2 = generateStealthKeysFromSignature(otherSig);
+
+    expect(keys1.metaAddress.encoded).not.toBe(keys2.metaAddress.encoded);
   });
 });

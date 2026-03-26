@@ -54,6 +54,34 @@ export function generateStealthKeys(rootPrivateKey: `0x${string}`): StealthKeys 
 }
 
 /**
+ * Generate stealth keys from a wallet signature.
+ *
+ * For use with Tempo passkey wallets or any wallet where the user
+ * can't export their private key. The user signs a deterministic
+ * message, and the signature is hashed to derive the root key.
+ *
+ * Usage with wagmi:
+ * ```ts
+ * const signature = await signMessage({ message: "Generate StealthPay keys" });
+ * const keys = generateStealthKeysFromSignature(signature);
+ * ```
+ *
+ * The same wallet + message always produces the same stealth keys.
+ */
+export function generateStealthKeysFromSignature(
+  signature: `0x${string}`
+): StealthKeys {
+  const rootKey = keccak256(signature);
+  return generateStealthKeys(rootKey as `0x${string}`);
+}
+
+/**
+ * The deterministic message that wallets sign to generate stealth keys.
+ * Use this constant to ensure the same message is always signed.
+ */
+export const STEALTH_KEY_MESSAGE = "Generate StealthPay stealth keys";
+
+/**
  * Parse a 66-byte encoded stealth meta-address into its component public keys.
  */
 export function parseMetaAddress(encoded: `0x${string}`): StealthMetaAddress {
