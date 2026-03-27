@@ -20,3 +20,7 @@ docs/CONTEXT.md
 .env.local
 
 apps/api/local.db
+
+# ZK ceremony artifacts (large, not needed for proving)
+packages/circuits/build/*.ptau
+packages/circuits/build/*_0000.zkey
