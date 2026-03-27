@@ -1,35 +1,36 @@
 # StealthPay
 
-Private stablecoin payments on Tempo — stealth addresses with batch sweep and fee sponsorship.
+Private stablecoin payments on Tempo — stealth addresses + ZK privacy pool.
 
 ## What is StealthPay?
 
-When someone pays you on-chain, everyone can see your wallet and payment history. StealthPay fixes this — every payment creates a one-time address only you can spend from. Your real wallet is never exposed.
+When someone pays you on-chain, everyone can see who paid who. StealthPay fixes this with two layers of privacy:
 
-Built on [Tempo](https://tempo.xyz) with:
-- **Fee sponsorship** — sweep funds without holding gas
-- **Sub-$0.001 fees** — dust collection is economical
-- **MPP payment gating** — pay per scan/sweep, no API keys
-- **Stablecoin-native** — works with any TIP-20 token
+1. **Stealth addresses** — every payment creates a one-time address via ECDH. Your real wallet is never exposed.
+2. **Privacy pool** — sweep stealth funds into a ZK pool and withdraw to any fresh address with a Groth16 proof. No on-chain link between deposit and withdrawal.
+
+Built on [Tempo](https://tempo.xyz) where gas is paid in stablecoins, fees are under $0.001, and the protocol supports fee sponsorship natively.
 
 ## Architecture
 
 ```
 stealthpay/
 ├── apps/
-│   ├── web/              # Web app — connect wallet, send, receive, scan & sweep
+│   ├── web/              # React + Vite + Tailwind + wagmi (4 tabs)
 │   └── api/              # Hono scanner + sweep API (MPP-gated)
 ├── packages/
 │   ├── sdk/              # stealthpay-tempo — npm package
-│   └── contracts/        # StealthRegistry + StealthAnnouncer (Foundry)
+│   ├── contracts/        # Solidity — Registry, Announcer, StealthPool, Verifier
+│   └── circuits/         # circom ZK circuit (Groth16)
 ```
 
 | Component | Description |
 |---|---|
-| **Web App** | Connect wallet, generate meta-address, send/receive/sweep stealth payments |
+| **Web App** | Connect wallet, send, receive, scan, sweep (direct or privacy pool), ZK redeem |
 | **StealthRegistry.sol** | EIP-6538 — on-chain stealth meta-address registry |
 | **StealthAnnouncer.sol** | EIP-5564 — on-chain ephemeral key announcements |
-| **stealthpay-tempo** | TypeScript SDK — keygen, send, receive, sweep |
+| **StealthPool.sol** | Privacy pool — Poseidon Merkle tree + Groth16 ZK withdrawals |
+| **stealthpay-tempo** | TypeScript SDK — keygen, send, receive, sweep, pool deposit/withdraw |
 | **API** | Scanner service + sweep endpoint, MPP-gated |
 
 ## Quick Start
@@ -59,44 +60,60 @@ cd apps/api && bun run src/index.ts
 ### Run tests
 
 ```bash
-# SDK tests
+# SDK tests (14 tests)
 cd packages/sdk && bun test
 
-# Contract tests (requires Tempo Foundry fork: foundryup -n tempo)
+# Contract tests (27 tests — requires: foundryup -n tempo)
 cd packages/contracts && forge test
 
-# E2E flow on testnet
+# E2E stealth flow on testnet
 bun run test/e2e-flow.ts
+
+# E2E privacy pool flow on testnet (use Node — snarkjs crashes Bun)
+npx tsx test/e2e-pool-flow.ts
 ```
 
 ## Web App
 
-The web app has three tabs:
+Four tabs:
 
 | Tab | What it does |
 |---|---|
 | **Receive** | Connect wallet → sign message → generate stealth meta-address → share it |
 | **Send** | Paste a meta-address → enter amount → sends pathUSD to a stealth address + announces |
-| **Scan** | Sign to unlock keys → scan chain for payments → one-click sweep to any address |
+| **Scan** | Scan chain for payments → sweep directly or deposit into privacy pool |
+| **Redeem** | Enter fresh address → generate ZK proof in browser → withdraw from pool privately |
 
 - Works with Tempo passkey wallets (WebAuthn) and MetaMask
-- Uses the `stealthpay-tempo` SDK directly — no custom crypto code
-- Optional destination address for sweep (for better privacy, sweep to a fresh wallet)
+- Uses the `stealthpay-tempo` SDK directly
+- Two sweep modes: **Direct** (to any address) or **Privacy Pool** (ZK withdrawal later)
+
+## How It Works
+
+### Basic Flow (stealth addresses)
+```
+Sender → stealth address → sweep → recipient wallet
+```
+
+### Full Privacy Flow (+ privacy pool)
+```
+Sender → stealth address → privacy pool → ZK proof → fresh address
+```
+
+1. **Recipient** connects wallet, signs a message to derive stealth keys, shares meta-address
+2. **Sender** pastes meta-address, computes a one-time stealth address via ECDH, sends tokens + announces
+3. **Recipient** scans chain, detects payment, sweeps into privacy pool with a Poseidon note commitment
+4. **Recipient** generates a Groth16 ZK proof in browser, withdraws to any fresh address — no on-chain link
 
 ## SDK Usage
 
-### Generate stealth keys (from wallet signature)
+### Generate stealth keys
 
 ```typescript
-import {
-  generateStealthKeysFromSignature,
-  STEALTH_KEY_MESSAGE,
-} from "stealthpay-tempo";
+import { generateStealthKeysFromSignature, STEALTH_KEY_MESSAGE } from "stealthpay-tempo";
 
-// User signs a deterministic message — same wallet always produces same keys
 const signature = await walletClient.signMessage({ message: STEALTH_KEY_MESSAGE });
 const keys = generateStealthKeysFromSignature(signature);
-
 // Share keys.metaAddress.encoded publicly
 ```
 
@@ -105,7 +122,6 @@ const keys = generateStealthKeysFromSignature(signature);
 ```typescript
 import { computeStealthAddress, parseMetaAddress } from "stealthpay-tempo";
 
-// Compute stealth address from recipient's meta-address
 const meta = parseMetaAddress(recipientMetaAddress);
 const { stealthAddress, ephemeralPubKey, viewTag } = computeStealthAddress(meta);
 
@@ -113,17 +129,13 @@ const { stealthAddress, ephemeralPubKey, viewTag } = computeStealthAddress(meta)
 // 2. Call StealthAnnouncer.announce(1, stealthAddress, ephemeralPubKey, metadata)
 ```
 
-### Detect and sweep payments
+### Detect and sweep
 
 ```typescript
 import { checkStealthAddress, sweepStealthAddress } from "stealthpay-tempo";
 
-// Check if a payment is yours
 const stealthPrivKey = checkStealthAddress(
-  ephemeralPubKey,
-  myKeys.spendingKey,
-  myKeys.viewingKey,
-  announcedStealthAddress
+  ephemeralPubKey, myKeys.spendingKey, myKeys.viewingKey, announcedStealthAddress
 );
 
 if (stealthPrivKey) {
@@ -131,22 +143,28 @@ if (stealthPrivKey) {
     stealthPrivKey,
     tokenAddress: PATHUSD_ADDRESS,
     amount: balance,
-    destination: "0xFRESH_WALLET", // use a fresh address for privacy
+    destination: "0xFRESH_WALLET",
     rpcUrl: "https://rpc.moderato.tempo.xyz",
     chain: tempoTestnet,
   });
 }
 ```
 
-## API Routes
+### Deposit to privacy pool
 
-| Route | Auth | Price | Description |
-|---|---|---|---|
-| `POST /register` | Free | — | Register stealth meta-address for scanning |
-| `POST /scan` | MPP | $0.001 | Get pending stealth payments |
-| `POST /sweep` | MPP | $0.01 | Sweep all pending payments to destination |
-| `GET /announcements` | Free | — | Public ephemeral key feed |
-| `GET /health` | Free | — | Health check |
+```typescript
+import { depositToPool } from "stealthpay-tempo";
+
+await depositToPool({
+  stealthPrivKey,
+  tokenAddress: PATHUSD_ADDRESS,
+  amount: depositAmount,
+  poolAddress: POOL_ADDRESS,
+  noteCommitment, // Poseidon hash computed off-chain
+  rpcUrl: "https://rpc.moderato.tempo.xyz",
+  chain: tempoTestnet,
+});
+```
 
 ## Contract Addresses (Tempo Testnet)
 
@@ -154,25 +172,11 @@ if (stealthPrivKey) {
 |---|---|
 | StealthRegistry | `0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4` |
 | StealthAnnouncer | `0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88` |
+| StealthPool | `0xb82D999AD58Fe74BfA800D9975d7a22922D0AaA4` |
+| Groth16Verifier | `0x6a701f74126f0D3cED8b1BD85fb9CF0DDd08C371` |
 | pathUSD | `0x20c0000000000000000000000000000000000000` |
 
 Chain: Tempo Moderato Testnet (ID: 42431) | RPC: `https://rpc.moderato.tempo.xyz`
-
-## Environment Variables
-
-Create `.env` in `apps/api/`:
-
-```env
-DATABASE_URL=file:local.db
-DATABASE_AUTH_TOKEN=
-RPC_URL=https://rpc.moderato.tempo.xyz
-REGISTRY_ADDRESS=0x8B73CFf4d49e43A8A2ecf6293807a9499c680aA4
-ANNOUNCER_ADDRESS=0x01A1b9dAF1B98e6037AdDFf95639DBfA907A4A88
-MPP_SECRET_KEY=
-MPP_RECIPIENT=0x...
-PORT=3000
-SCAN_INTERVAL_MS=10000
-```
 
 ## Deploy Contracts
 
@@ -186,46 +190,28 @@ cd packages/contracts
 cast wallet new
 cast rpc tempo_fundAddress <YOUR_ADDRESS> --rpc-url https://rpc.moderato.tempo.xyz
 
-# Deploy
-forge create src/StealthRegistry.sol:StealthRegistry \
-  --rpc-url https://rpc.moderato.tempo.xyz \
-  --private-key <YOUR_PRIVATE_KEY> \
-  --broadcast
-
-forge create src/StealthAnnouncer.sol:StealthAnnouncer \
-  --rpc-url https://rpc.moderato.tempo.xyz \
-  --private-key <YOUR_PRIVATE_KEY> \
-  --broadcast
+# Deploy all contracts (Registry, Announcer, Poseidon libs, Verifier, Pool)
+PRIVATE_KEY=0x... ./script/DeployAll.sh
 ```
 
-## How It Works
-
-1. **Recipient** connects wallet, signs a message to derive stealth keys, shares meta-address
-2. **Sender** pastes meta-address, computes a one-time stealth address via ECDH, sends tokens + announces
-3. **Recipient** scans chain for announcements matching their viewing key
-4. **Recipient** sweeps funds from stealth addresses to their wallet (or a fresh address for privacy)
-
-The on-chain observer sees transfers to random addresses but cannot link sender to recipient.
-
-### Security Model
+## Security Model
 
 | Role | Knows | Can Do | Cannot Do |
 |---|---|---|---|
 | Sender | Recipient's meta-address (public) | Send to stealth address | Detect other payments |
 | Scanner | Viewing keys | Detect payments | Spend funds |
-| Recipient | Spending + viewing keys | Detect and spend | — |
-| Observer | Stealth addresses | See transfers happened | Link sender to recipient |
+| Recipient | Spending + viewing keys + note secrets | Detect, sweep, and withdraw | — |
+| Observer | Stealth addresses, pool activity | See money moved | Link sender to recipient |
 
-> **Privacy note:** When sweeping, the tx links the stealth address to the destination. For maximum privacy, sweep to a fresh wallet — not your main address.
+> **Privacy note:** Direct sweep links stealth address → destination. For full privacy, use the privacy pool — deposit into pool, then ZK withdraw to a fresh address.
 
 ## Tech Stack
 
-- **Contracts**: Solidity + Foundry (EIP-5564, EIP-6538)
+- **Contracts**: Solidity 0.8.24 + Foundry (Tempo fork), Poseidon libraries
+- **ZK**: circom 2.2.3, snarkjs, Groth16 (BN254), 5,731 constraints
 - **SDK**: TypeScript, viem, @noble/secp256k1
-- **Web**: React + Vite + Tailwind + wagmi
-- **API**: Hono + Bun
-- **DB**: Turso (libSQL)
-- **Payments**: MPP (mppx)
+- **Web**: React 19, Vite 8, Tailwind 4, wagmi 3 (webAuthn + injected), circomlibjs, snarkjs
+- **API**: Hono, Bun, @libsql/client (Turso), mppx
 - **Monorepo**: Bun workspaces + Turborepo
 
 ## License
